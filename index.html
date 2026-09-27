@@ -300,6 +300,21 @@
   .role-badge { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; }
   .role-badge.admin { background: var(--amber-bg); color: #6B4A00; }
   .role-badge.sales { background: var(--line-soft); color: var(--ink-soft); }
+  .role-badge.editor { background: #E3E8FD; color: #2D4A9E; }
+  .table-wrap select, .table-wrap input[type=date] { font-family: inherit; font-size: 12.5px; padding: 5px 7px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); max-width: 180px; }
+  .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+  .calendar-dow { font-size: 11.5px; font-weight: 700; color: var(--ink-faint); text-align: center; padding: 4px 0; }
+  .calendar-cell { min-height: 84px; border: 1px solid var(--line); border-radius: 8px; padding: 7px; background: var(--surface); cursor: pointer; display: flex; flex-direction: column; gap: 4px; }
+  .calendar-cell:hover { border-color: var(--steel); }
+  .calendar-cell.empty { background: transparent; border: none; cursor: default; }
+  .calendar-cell.today .calendar-daynum { color: #C97F00; }
+  .calendar-daynum { font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+  .calendar-entry-car { font-size: 11.5px; font-weight: 600; background: var(--line-soft); border-radius: 5px; padding: 2px 6px; align-self: flex-start; }
+  .calendar-entry-clip { font-size: 10.5px; color: var(--ink-faint); }
+  @media (max-width: 720px) {
+    .calendar-cell { min-height: 64px; padding: 5px; }
+    .calendar-entry-clip { display: none; }
+  }
   .user-add-form { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; margin: 14px 0 20px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px; }
   .user-add-form .field { margin-bottom: 0; min-width: 140px; flex: 1; }
 
@@ -362,10 +377,12 @@
       <h1>ระบบจัดการเคสลูกค้า</h1>
     </div>
     <nav class="sidebar-nav">
-      <button class="nav-item active" data-tab="cases" onclick="switchTab('cases')"><span class="dot"></span>เคสลูกค้า</button>
+      <button class="nav-item active" id="casesNavItem" data-tab="cases" onclick="switchTab('cases')"><span class="dot"></span>เคสลูกค้า</button>
       <button class="nav-item hidden" id="carsNavItem" data-tab="cars" onclick="switchTab('cars')"><span class="dot"></span>จัดการรหัสรถ</button>
       <button class="nav-item hidden" id="brokersNavItem" data-tab="brokers" onclick="switchTab('brokers')"><span class="dot"></span>จัดการรหัสนายหน้า</button>
       <button class="nav-item hidden" id="usersNavItem" data-tab="users" onclick="switchTab('users')"><span class="dot"></span>จัดการผู้ใช้งาน</button>
+      <button class="nav-item hidden" id="videosNavItem" data-tab="videos" onclick="switchTab('videos')"><span class="dot"></span>จัดการวิดีโอ</button>
+      <button class="nav-item hidden" id="postplanNavItem" data-tab="postplan" onclick="switchTab('postplan')"><span class="dot"></span>แผนโพสรายสัปดาห์</button>
     </nav>
     <div class="who-pill">
       <span class="name" id="whoName">—</span>
@@ -549,6 +566,7 @@
             <select id="nu_role">
               <option value="sales">เซลล์</option>
               <option value="admin">แอดมิน</option>
+              <option value="editor">ตัดต่อ</option>
             </select>
           </div>
           <button class="btn btn-primary" onclick="addUser()">+ เพิ่มผู้ใช้งาน</button>
@@ -557,7 +575,117 @@
       </div>
     </div>
 
+    <!-- VIDEOS TAB (admin + editor) -->
+    <div id="tab-videos" class="hidden">
+      <div class="topbar">
+        <div class="topbar-row">
+          <div>
+            <h2>จัดการวิดีโอ</h2>
+            <p class="sub">บันทึกวิดีโอที่ตัดต่อ ติดตามสถานะตัดต่อ / Planner / ลงช่อง</p>
+          </div>
+        </div>
+      </div>
+      <div class="content">
+        <div class="car-add-form">
+          <div class="field">
+            <label>ชื่อวิดีโอ</label>
+            <input type="text" id="newVideoTitle" placeholder="เช่น รีวิว Honda City 2019">
+          </div>
+          <div class="field">
+            <label>ลิงก์ VDO (ถ้ามี)</label>
+            <input type="text" id="newVideoLink" placeholder="https://...">
+          </div>
+          <div class="field">
+            <label>หมายเหตุ</label>
+            <input type="text" id="newVideoNote" placeholder="ข้อมูลเพิ่มเติม (ถ้ามี)">
+          </div>
+          <button class="btn btn-primary" onclick="addVideoFromTab()">+ เพิ่มวิดีโอ</button>
+        </div>
+        <div class="summary-block" style="margin-top:20px;">
+          <div class="summary-heading">รถที่เคยเลือกโพสล่าสุด (เฉพาะรถที่ยังไม่ขาย)</div>
+          <div id="carPostSummary"></div>
+        </div>
+        <div class="car-filter-bar" id="videoFilterBar"></div>
+        <div class="table-wrap" style="margin-top:16px;">
+          <table>
+            <thead>
+              <tr>
+                <th>รหัส</th>
+                <th>ชื่อวิดีโอ</th>
+                <th>สถานะ</th>
+                <th>Planner</th>
+                <th>Approval</th>
+                <th>VDO</th>
+                <th>วันที่สร้าง</th>
+                <th>วันที่เสร็จ</th>
+                <th>วันที่ลง</th>
+                <th>หมายเหตุ</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="videoTableBody"></tbody>
+          </table>
+        </div>
+        <div class="muted" id="videoEmptyState" style="padding:16px 2px; display:none;">ยังไม่มีวิดีโอในระบบ เพิ่มรายการแรกด้านบนได้เลย</div>
+      </div>
+    </div>
+
+    <!-- WEEKLY POST PLAN TAB (admin + editor) -->
+    <div id="tab-postplan" class="hidden">
+      <div class="topbar">
+        <div class="topbar-row">
+          <div>
+            <h2>แผนการลงคลิป / โพสรายสัปดาห์</h2>
+            <p class="sub">คลิกวันที่ในปฏิทินเพื่อกำหนดรหัสรถและคลิปที่จะโพสของวันนั้น</p>
+          </div>
+        </div>
+      </div>
+      <div class="content">
+        <div class="month-bar">
+          <button class="icon-btn" title="เดือนก่อนหน้า" onclick="changePostPlanMonth(-1)">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <div class="month-label" id="postPlanMonthLabel">—</div>
+          <button class="icon-btn" title="เดือนถัดไป" onclick="changePostPlanMonth(1)">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <button class="btn btn-ghost btn-sm hidden" id="postPlanBackToCurrentBtn" onclick="goToCurrentPostPlanMonth()">กลับเดือนปัจจุบัน</button>
+        </div>
+        <div class="calendar-grid" id="postPlanCalendarGrid"></div>
+      </div>
+    </div>
+
   </main>
+</div>
+
+<!-- day plan modal -->
+<div class="overlay" id="dayPlanOverlay" style="justify-content:center; align-items:center;">
+  <div class="drawer" style="width:min(420px,92%); height:auto; max-height:88vh; border-radius:12px;">
+    <div class="drawer-head">
+      <h3 id="dayPlanTitle">แผนโพสวันที่ —</h3>
+      <button class="drawer-close" onclick="closeDayPlan()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="drawer-body">
+      <div class="field">
+        <label>โพส (รหัสรถ)</label>
+        <select id="dp_car"></select>
+      </div>
+      <div class="field">
+        <label>คลิป 1</label>
+        <select id="dp_clip1"></select>
+      </div>
+      <div class="field">
+        <label>คลิป 2</label>
+        <select id="dp_clip2"></select>
+      </div>
+      <div style="display:flex; gap:10px; margin-top:16px;">
+        <button class="btn btn-primary" onclick="saveDayPlan()">บันทึก</button>
+        <button class="btn btn-ghost" id="dp_deleteBtn" onclick="deleteDayPlan()">ลบแผนวันนี้</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- Case drawer -->
@@ -755,6 +883,14 @@ const STATUSES = [
 ];
 const CHANNELS = ['ตลาดรถ', 'TikTok', 'Facebook', 'Instagram', 'One2Car', 'นายหน้า', 'น้ำ', 'บี', 'Walk-in', 'อื่นๆ'];
 const SOLD_STATUS = 'ขายแล้ว';
+const VIDEO_STATUS_EDITING = 'กำลังตัดต่อ';
+const VIDEO_STATUS_REVIEW = 'รอตรวจ';
+const VIDEO_STATUS_DONE = 'เสร็จแล้ว';
+const APPROVAL_PENDING = 'ยังไม่ตรวจ';
+const APPROVAL_PASS = 'ผ่าน';
+const APPROVAL_REVISE = 'ต้องแก้';
+const PLAN_NOT_POSTED = 'ยังไม่ลง';
+const PLAN_POSTED = 'ลงแล้ว';
 const SESSION_KEY = 'nc_session_v1';
 const POLL_MS = 8000; // สำรองไว้เผื่อ Realtime ไม่ทำงาน จะดึงข้อมูลใหม่ทุก ๆ กี่มิลลิวินาที
 
@@ -769,13 +905,30 @@ let editingCaseId = null;
 let pendingDeleteAction = null;
 let selectedMonth = currentMonthKey();
 let carFilter = 'all'; // 'all' | 'available' | 'sold' | 'returned'
+let videos = [];
+let weeklyPosts = [];
+let videoFilter = 'all'; // 'all' | 'editing' | 'done'
 
 function isAdmin() { return session && session.role === 'admin'; }
+function isEditor() { return session && session.role === 'editor'; }
+function canManageVideos() { return isAdmin() || isEditor(); }
+function roleLabel(role) { return role === 'admin' ? 'แอดมิน' : role === 'editor' ? 'ตัดต่อ' : 'เซลล์'; }
 
 /* ---------------- Row <-> App object mapping ---------------- */
 function rowToUser(r) { return { username: r.username, displayName: r.display_name, role: r.role, passwordHash: r.password_hash, createdAt: r.created_at }; }
 function rowToCar(r) { return { id: r.code, code: r.code, model: r.model, sold: !!r.sold, soldCaseId: r.sold_case_id }; }
 function rowToBroker(r) { return { id: r.code, code: r.code, nickname: r.nickname, fullName: r.full_name, phone: r.phone }; }
+function rowToVideo(r) {
+  return {
+    id: r.id, code: r.code, title: r.title, status: r.status,
+    plannerStatus: r.planner_status, approvalStatus: r.approval_status || APPROVAL_PENDING,
+    link: r.link, note: r.note,
+    createdAt: r.created_at, completedAt: r.completed_at || null,
+  };
+}
+function rowToWeeklyPost(r) {
+  return { id: r.id, postDate: r.post_date, carCode: r.car_code, clip1VideoId: r.clip1_video_id, clip2VideoId: r.clip2_video_id, createdAt: r.created_at };
+}
 function rowToCase(r) {
   return {
     id: r.id, caseCode: r.case_code, carCode: r.car_code, carModel: r.car_model,
@@ -932,7 +1085,7 @@ function enterApp() {
   document.getElementById('authScreen').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
   document.getElementById('whoName').textContent = session.displayName;
-  document.getElementById('whoRole').textContent = session.role === 'admin' ? 'แอดมิน (เห็นทุกเคส)' : 'เซลล์';
+  document.getElementById('whoRole').textContent = session.role === 'admin' ? 'แอดมิน (เห็นทุกเคส)' : roleLabel(session.role);
   if (isAdmin()) {
     document.getElementById('usersNavItem').classList.remove('hidden');
     document.getElementById('carsNavItem').classList.remove('hidden');
@@ -940,16 +1093,32 @@ function enterApp() {
     document.getElementById('salesFilter').classList.remove('hidden');
     document.getElementById('caseTitle').textContent = 'เคสทั้งหมด (ทุกเซลล์)';
     document.getElementById('caseSub').textContent = 'เห็นเคสของเซลล์ทุกคน';
+  } else if (isEditor()) {
+    document.getElementById('casesNavItem').classList.add('hidden');
   } else {
     document.getElementById('caseTitle').textContent = 'เคสของฉัน';
     document.getElementById('caseSub').textContent = 'เคสที่คุณดูแลอยู่ เพิ่ม แก้ไข และติดตามสถานะได้ที่นี่';
   }
+  if (canManageVideos()) {
+    document.getElementById('videosNavItem').classList.remove('hidden');
+    document.getElementById('postplanNavItem').classList.remove('hidden');
+  }
   setConn('ok', 'เชื่อมต่อแล้ว');
-  subscribeCases();
-  subscribeCars();
-  subscribeBrokers();
+  if (isEditor()) {
+    switchTab('videos');
+  } else {
+    subscribeCases();
+    subscribeBrokers();
+  }
+  subscribeCars(); // ต้องใช้รหัสรถทั้งฝั่งเคสและฝั่งแผนโพส
+  if (canManageVideos()) { subscribeVideos(); subscribeWeeklyPosts(); }
   if (isAdmin()) subscribeUsers();
-  setInterval(() => { reloadCases(); reloadCars(); reloadBrokers(); if (isAdmin()) reloadUsers(); }, POLL_MS);
+  setInterval(() => {
+    if (!isEditor()) { reloadCases(); reloadBrokers(); }
+    reloadCars();
+    if (canManageVideos()) { reloadVideos(); reloadWeeklyPosts(); }
+    if (isAdmin()) reloadUsers();
+  }, POLL_MS);
 }
 
 function setConn(state, label) {
@@ -978,7 +1147,28 @@ async function reloadCars() {
     cars = data.map(rowToCar).sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true, sensitivity: 'base' }));
     renderCarList();
     populateCarSelect();
+    populatePostPlanSelects();
+    renderCarPostSummary();
   } catch (e) { showToast('โหลดข้อมูลรหัสรถไม่สำเร็จ: ' + e.message, true); }
+}
+async function reloadVideos() {
+  try {
+    const { data, error } = await sb.from('videos').select('*').order('created_at', { ascending: true });
+    if (error) throw error;
+    videos = data.map(rowToVideo).sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true, sensitivity: 'base' }));
+    renderVideoList();
+    populatePostPlanSelects();
+    renderPostPlanCalendar();
+  } catch (e) { showToast('โหลดข้อมูลวิดีโอไม่สำเร็จ: ' + e.message, true); }
+}
+async function reloadWeeklyPosts() {
+  try {
+    const { data, error } = await sb.from('weekly_posts').select('*').order('post_date', { ascending: true });
+    if (error) throw error;
+    weeklyPosts = data.map(rowToWeeklyPost);
+    renderPostPlanCalendar();
+    renderCarPostSummary();
+  } catch (e) { showToast('โหลดข้อมูลแผนโพสไม่สำเร็จ: ' + e.message, true); }
 }
 async function reloadBrokers() {
   try {
@@ -1015,6 +1205,14 @@ function subscribeUsers() {
   reloadUsers();
   sb.channel('users-rt').on('postgres_changes', { event: '*', schema: 'public', table: 'app_users' }, () => reloadUsers()).subscribe();
 }
+function subscribeVideos() {
+  reloadVideos();
+  sb.channel('videos-rt').on('postgres_changes', { event: '*', schema: 'public', table: 'videos' }, () => reloadVideos()).subscribe();
+}
+function subscribeWeeklyPosts() {
+  reloadWeeklyPosts();
+  sb.channel('weekly-posts-rt').on('postgres_changes', { event: '*', schema: 'public', table: 'weekly_posts' }, () => reloadWeeklyPosts()).subscribe();
+}
 
 /* ---------------- Static UI population ---------------- */
 function populateStaticSelects() {
@@ -1046,6 +1244,8 @@ function switchTab(tab) {
   document.getElementById('tab-cars').classList.toggle('hidden', tab !== 'cars');
   document.getElementById('tab-brokers').classList.toggle('hidden', tab !== 'brokers');
   document.getElementById('tab-users').classList.toggle('hidden', tab !== 'users');
+  document.getElementById('tab-videos').classList.toggle('hidden', tab !== 'videos');
+  document.getElementById('tab-postplan').classList.toggle('hidden', tab !== 'postplan');
 }
 
 /* ---------------- Data scoping ---------------- */
@@ -1625,6 +1825,324 @@ function askDeleteBroker(code) {
   });
 }
 
+/* ---------------- Videos tab (admin + editor) ---------------- */
+function nextVideoCode() {
+  let max = 0;
+  videos.forEach(v => { const m = /^v(\d+)$/i.exec(v.code || ''); if (m) max = Math.max(max, parseInt(m[1], 10)); });
+  return 'v' + String(max + 1).padStart(3, '0');
+}
+
+async function addVideoFromTab() {
+  const titleEl = document.getElementById('newVideoTitle');
+  const linkEl = document.getElementById('newVideoLink');
+  const noteEl = document.getElementById('newVideoNote');
+  const title = titleEl.value.trim();
+  if (!title) { showToast('กรุณากรอกชื่อวิดีโอ', true); return; }
+  const code = nextVideoCode();
+  try {
+    const { error } = await sb.from('videos').insert({
+      code, title, status: VIDEO_STATUS_EDITING, planner_status: PLAN_NOT_POSTED, approval_status: APPROVAL_PENDING,
+      link: linkEl.value.trim(), note: noteEl.value.trim(), created_at: Date.now(),
+    });
+    if (error) throw error;
+    titleEl.value = ''; linkEl.value = ''; noteEl.value = '';
+    showToast('เพิ่มวิดีโอ ' + code + ' แล้ว');
+    reloadVideos();
+  } catch (e) { showToast('บันทึกไม่สำเร็จ: ' + e.message, true); }
+}
+
+async function toggleVideoStatus(id) {
+  const v = videos.find(x => x.id === id);
+  if (!v) return;
+  let newStatus;
+  if (isAdmin()) {
+    const order = [VIDEO_STATUS_EDITING, VIDEO_STATUS_REVIEW, VIDEO_STATUS_DONE];
+    const idx = order.indexOf(v.status);
+    newStatus = order[(idx + 1) % order.length];
+  } else {
+    if (v.status === VIDEO_STATUS_DONE) { showToast('วิดีโอนี้ผ่านการตรวจแล้ว รอแอดมินเปลี่ยนผลตรวจหากต้องแก้ไขใหม่', true); return; }
+    newStatus = v.status === VIDEO_STATUS_EDITING ? VIDEO_STATUS_REVIEW : VIDEO_STATUS_EDITING;
+  }
+  try {
+    const { error } = await sb.from('videos').update({ status: newStatus, completed_at: newStatus === VIDEO_STATUS_DONE ? Date.now() : null }).eq('id', id);
+    if (error) throw error;
+    showToast('อัปเดตสถานะ ' + v.code + ' เป็น ' + newStatus);
+    reloadVideos();
+  } catch (e) { showToast('อัปเดตไม่สำเร็จ: ' + e.message, true); }
+}
+
+async function setVideoApproval(id, newApproval) {
+  if (!isAdmin()) return;
+  const v = videos.find(x => x.id === id);
+  if (!v) return;
+  const patch = { approval_status: newApproval };
+  if (newApproval === APPROVAL_PASS) {
+    patch.status = VIDEO_STATUS_DONE;
+    patch.completed_at = Date.now();
+  } else if (newApproval === APPROVAL_REVISE) {
+    patch.status = VIDEO_STATUS_EDITING;
+    patch.completed_at = null;
+  }
+  try {
+    const { error } = await sb.from('videos').update(patch).eq('id', id);
+    if (error) throw error;
+    showToast('อัปเดตผลตรวจของ ' + v.code + ' เป็น ' + newApproval);
+    reloadVideos();
+  } catch (e) { showToast('อัปเดตไม่สำเร็จ: ' + e.message, true); }
+}
+
+function askDeleteVideo(id) {
+  openConfirm('ลบวิดีโอนี้?', 'ถ้าวิดีโอนี้ถูกใช้อยู่ในแผนโพสรายสัปดาห์ ช่องคลิปนั้นจะว่างลงอัตโนมัติ', async () => {
+    try {
+      const { error } = await sb.from('videos').delete().eq('id', id);
+      if (error) throw error;
+      showToast('ลบวิดีโอแล้ว');
+      reloadVideos();
+      reloadWeeklyPosts();
+    } catch (e) { showToast('ลบไม่สำเร็จ: ' + e.message, true); }
+  });
+}
+
+function setVideoFilter(key) {
+  videoFilter = key;
+  renderVideoList();
+}
+
+function videoPostDate(videoId) {
+  const post = weeklyPosts.find(p => p.clip1VideoId === videoId || p.clip2VideoId === videoId);
+  return post ? post.postDate : null;
+}
+
+function renderCarPostSummary() {
+  const wrap = document.getElementById('carPostSummary');
+  if (!wrap) return;
+  const lastByCarCode = {};
+  weeklyPosts.forEach(p => {
+    if (!p.carCode || !p.postDate) return;
+    if (!lastByCarCode[p.carCode] || p.postDate > lastByCarCode[p.carCode]) lastByCarCode[p.carCode] = p.postDate;
+  });
+  const rows = Object.entries(lastByCarCode)
+    .map(([code, date]) => ({ code, date, car: cars.find(c => c.code === code) }))
+    .filter(r => r.car && carDisplayStatus(r.car) !== 'sold')
+    .sort((a, b) => b.date - a.date);
+
+  if (rows.length === 0) {
+    wrap.innerHTML = '<div class="muted" style="padding:4px 2px;">ยังไม่มีรถที่เคยเลือกโพส (เฉพาะรถที่ยังไม่ขาย)</div>';
+    return;
+  }
+  wrap.innerHTML = `
+    <div class="car-list">
+      ${rows.map(r => `
+        <div class="car-row">
+          <div><span class="code-badge">${escapeHtml(r.code)}</span> ${escapeHtml(r.car.model)}</div>
+          <div class="muted">โพสล่าสุด ${fmtDate(r.date)}</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderVideoList() {
+  const filterBar = document.getElementById('videoFilterBar');
+  const tbody = document.getElementById('videoTableBody');
+  const empty = document.getElementById('videoEmptyState');
+  if (!filterBar || !tbody) return;
+
+  const counts = {
+    all: videos.length,
+    editing: videos.filter(v => v.status === VIDEO_STATUS_EDITING).length,
+    review: videos.filter(v => v.status === VIDEO_STATUS_REVIEW).length,
+    done: videos.filter(v => v.status === VIDEO_STATUS_DONE).length,
+  };
+  const chips = [['all', 'ทั้งหมด'], ['editing', 'กำลังตัดต่อ'], ['review', 'รอตรวจ'], ['done', 'เสร็จแล้ว']];
+  filterBar.innerHTML = chips.map(([key, label]) => `
+    <button class="car-filter-chip ${videoFilter === key ? 'active' : ''}" onclick="setVideoFilter('${key}')">${label} (${counts[key]})</button>
+  `).join('');
+
+  const statusMap = { editing: VIDEO_STATUS_EDITING, review: VIDEO_STATUS_REVIEW, done: VIDEO_STATUS_DONE };
+  const filtered = videos.filter(v => videoFilter === 'all' || v.status === statusMap[videoFilter]);
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = '';
+    if (empty) empty.style.display = 'block';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+
+  const APPROVAL_STATES = [APPROVAL_PENDING, APPROVAL_PASS, APPROVAL_REVISE];
+  const APPROVAL_COLORS = { [APPROVAL_PENDING]: '#6B7280', [APPROVAL_PASS]: '#157F3C', [APPROVAL_REVISE]: '#DC6803' };
+  const STATUS_COLORS = { [VIDEO_STATUS_EDITING]: '#C97F00', [VIDEO_STATUS_REVIEW]: '#2563EB', [VIDEO_STATUS_DONE]: '#157F3C' };
+
+  tbody.innerHTML = filtered.map(v => {
+    const statusColor = STATUS_COLORS[v.status] || '#6B7280';
+    const plannerColor = v.plannerStatus === PLAN_POSTED ? '#157F3C' : '#6B7280';
+    const approvalColor = APPROVAL_COLORS[v.approvalStatus] || '#6B7280';
+    const approvalCell = isAdmin()
+      ? `<select onchange="setVideoApproval('${v.id}', this.value)">${APPROVAL_STATES.map(s => `<option value="${s}" ${s === v.approvalStatus ? 'selected' : ''}>${s}</option>`).join('')}</select>`
+      : `<span class="badge" style="background:${approvalColor}18; color:${approvalColor};"><span class="dot"></span>${escapeHtml(v.approvalStatus)}</span>`;
+    return `
+      <tr>
+        <td><span class="code-badge">${escapeHtml(v.code)}</span></td>
+        <td>${escapeHtml(v.title)}</td>
+        <td><button class="badge" style="background:${statusColor}18; color:${statusColor}; border:none; cursor:pointer;" onclick="toggleVideoStatus('${v.id}')"><span class="dot"></span>${escapeHtml(v.status)}</button></td>
+        <td><span class="badge" style="background:${plannerColor}18; color:${plannerColor};"><span class="dot"></span>${escapeHtml(v.plannerStatus)}</span></td>
+        <td>${approvalCell}</td>
+        <td>${v.link ? `<a href="${escapeHtml(v.link)}" target="_blank" rel="noopener" class="phone-link">เปิดลิงก์</a>` : '<span class="muted">—</span>'}</td>
+        <td class="muted">${fmtDate(v.createdAt)}</td>
+        <td class="muted">${fmtDate(v.completedAt)}</td>
+        <td class="muted">${fmtDate(videoPostDate(v.id))}</td>
+        <td class="muted">${escapeHtml(v.note || '—')}</td>
+        <td>
+          <button class="icon-btn danger" title="ลบ" onclick="askDeleteVideo('${v.id}')">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2m2 0v14a1 1 0 01-1 1H7a1 1 0 01-1-1V6h12z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+/* ---------------- Weekly post plan tab (admin + editor) ---------------- */
+function eligibleClipVideos(currentVideoId) {
+  return videos.filter(v => v.status === VIDEO_STATUS_DONE && (v.plannerStatus === PLAN_NOT_POSTED || v.id === currentVideoId));
+}
+function clipSelectOptionsHtml(currentVideoId) {
+  const opts = eligibleClipVideos(currentVideoId);
+  return '<option value="">— ไม่เลือก —</option>' +
+    opts.map(v => `<option value="${v.id}" ${v.id === currentVideoId ? 'selected' : ''}>${escapeHtml(v.code)} — ${escapeHtml(v.title)}</option>`).join('');
+}
+function carSelectOptionsHtml(currentCode) {
+  const available = cars.filter(c => carDisplayStatus(c) !== 'sold' || c.code === currentCode);
+  return '<option value="">— เลือกรหัสรถ —</option>' +
+    available.map(c => `<option value="${escapeHtml(c.code)}" ${c.code === currentCode ? 'selected' : ''}>${escapeHtml(c.code)} — ${escapeHtml(c.model)}${c.sold ? ' (ขายแล้ว)' : ''}</option>`).join('');
+}
+function populatePostPlanSelects() {
+  // เผื่อไว้สำหรับปุ่ม/ฟอร์มอื่นในอนาคต — ตอนนี้ dropdown ของแต่ละวันถูกเติมตอนเปิด modal (openDayPlan) แทน
+}
+
+let postPlanMonth = currentMonthKey();
+let dayPlanDate = null; // 'YYYY-MM-DD'
+let dayPlanEntryId = null;
+const DOW_LABELS_TH = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'];
+
+function localDateStr(ms) {
+  const d = new Date(ms);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function videoCodeOf(id) {
+  const v = videos.find(x => x.id === id);
+  return v ? v.code : '—';
+}
+
+function changePostPlanMonth(delta) {
+  postPlanMonth = shiftMonthKey(postPlanMonth, delta);
+  renderPostPlanCalendar();
+}
+function goToCurrentPostPlanMonth() {
+  postPlanMonth = currentMonthKey();
+  renderPostPlanCalendar();
+}
+
+function renderPostPlanCalendar() {
+  const labelEl = document.getElementById('postPlanMonthLabel');
+  const gridEl = document.getElementById('postPlanCalendarGrid');
+  const backBtn = document.getElementById('postPlanBackToCurrentBtn');
+  if (!gridEl) return;
+  labelEl.textContent = monthKeyLabel(postPlanMonth);
+  backBtn.classList.toggle('hidden', postPlanMonth === currentMonthKey());
+
+  const [y, m] = postPlanMonth.split('-').map(Number);
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const startDow = new Date(y, m - 1, 1).getDay();
+  const todayKey = localDateStr(Date.now());
+
+  let cells = DOW_LABELS_TH.map(d => `<div class="calendar-dow">${d}</div>`).join('');
+  for (let i = 0; i < startDow; i++) cells += '<div class="calendar-cell empty"></div>';
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateKeyStr = y + '-' + String(m).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+    const entry = weeklyPosts.find(p => p.postDate && localDateStr(p.postDate) === dateKeyStr);
+    const isToday = dateKeyStr === todayKey;
+    cells += `
+      <div class="calendar-cell ${isToday ? 'today' : ''}" onclick="openDayPlan('${dateKeyStr}')">
+        <div class="calendar-daynum">${d}</div>
+        ${entry ? `
+          <div class="calendar-entry-car">${escapeHtml(entry.carCode || 'ยังไม่เลือกรถ')}</div>
+          ${entry.clip1VideoId ? `<div class="calendar-entry-clip">คลิป1: ${escapeHtml(videoCodeOf(entry.clip1VideoId))}</div>` : ''}
+          ${entry.clip2VideoId ? `<div class="calendar-entry-clip">คลิป2: ${escapeHtml(videoCodeOf(entry.clip2VideoId))}</div>` : ''}
+        ` : ''}
+      </div>
+    `;
+  }
+  gridEl.innerHTML = cells;
+}
+
+function openDayPlan(dateKeyStr) {
+  dayPlanDate = dateKeyStr;
+  const entry = weeklyPosts.find(p => p.postDate && localDateStr(p.postDate) === dateKeyStr);
+  dayPlanEntryId = entry ? entry.id : null;
+  const [y, m, d] = dateKeyStr.split('-').map(Number);
+  const label = new Date(y, m - 1, d).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric', weekday: 'long' });
+  document.getElementById('dayPlanTitle').textContent = 'แผนโพสวันที่ ' + label;
+  document.getElementById('dp_car').innerHTML = carSelectOptionsHtml(entry ? entry.carCode : '');
+  document.getElementById('dp_clip1').innerHTML = clipSelectOptionsHtml(entry ? entry.clip1VideoId : '');
+  document.getElementById('dp_clip2').innerHTML = clipSelectOptionsHtml(entry ? entry.clip2VideoId : '');
+  document.getElementById('dp_deleteBtn').classList.toggle('hidden', !entry);
+  document.getElementById('dayPlanOverlay').classList.add('open');
+}
+function closeDayPlan() {
+  document.getElementById('dayPlanOverlay').classList.remove('open');
+  dayPlanDate = null;
+  dayPlanEntryId = null;
+}
+
+async function saveDayPlan() {
+  const carCode = document.getElementById('dp_car').value || null;
+  const clip1Id = document.getElementById('dp_clip1').value || null;
+  const clip2Id = document.getElementById('dp_clip2').value || null;
+  const [y, m, d] = dayPlanDate.split('-').map(Number);
+  const postDate = new Date(y, m - 1, d).getTime();
+  try {
+    let oldClip1 = null, oldClip2 = null;
+    if (dayPlanEntryId) {
+      const existing = weeklyPosts.find(p => p.id === dayPlanEntryId);
+      if (existing) { oldClip1 = existing.clip1VideoId; oldClip2 = existing.clip2VideoId; }
+      const { error } = await sb.from('weekly_posts').update({ post_date: postDate, car_code: carCode, clip1_video_id: clip1Id, clip2_video_id: clip2Id }).eq('id', dayPlanEntryId);
+      if (error) throw error;
+    } else {
+      const { error } = await sb.from('weekly_posts').insert({ post_date: postDate, car_code: carCode, clip1_video_id: clip1Id, clip2_video_id: clip2Id, created_at: Date.now() });
+      if (error) throw error;
+    }
+    if (oldClip1 && oldClip1 !== clip1Id) await sb.from('videos').update({ planner_status: PLAN_NOT_POSTED }).eq('id', oldClip1);
+    if (oldClip2 && oldClip2 !== clip2Id) await sb.from('videos').update({ planner_status: PLAN_NOT_POSTED }).eq('id', oldClip2);
+    if (clip1Id) await sb.from('videos').update({ planner_status: PLAN_POSTED }).eq('id', clip1Id);
+    if (clip2Id) await sb.from('videos').update({ planner_status: PLAN_POSTED }).eq('id', clip2Id);
+    showToast('บันทึกแผนโพสแล้ว');
+    closeDayPlan();
+    reloadWeeklyPosts();
+    reloadVideos();
+  } catch (e) { showToast('บันทึกไม่สำเร็จ: ' + e.message, true); }
+}
+
+function deleteDayPlan() {
+  if (!dayPlanEntryId) { closeDayPlan(); return; }
+  const id = dayPlanEntryId;
+  const entry = weeklyPosts.find(p => p.id === id);
+  openConfirm('ลบแผนโพสวันนี้?', 'คลิปที่เคยผูกไว้จะกลับไปเป็น "ยังไม่ลง" และเลือกไปใช้ในแผนอื่นได้อีก', async () => {
+    try {
+      const { error } = await sb.from('weekly_posts').delete().eq('id', id);
+      if (error) throw error;
+      if (entry) {
+        if (entry.clip1VideoId) await sb.from('videos').update({ planner_status: PLAN_NOT_POSTED }).eq('id', entry.clip1VideoId);
+        if (entry.clip2VideoId) await sb.from('videos').update({ planner_status: PLAN_NOT_POSTED }).eq('id', entry.clip2VideoId);
+      }
+      showToast('ลบแผนโพสแล้ว');
+      closeDayPlan();
+      reloadWeeklyPosts();
+      reloadVideos();
+    } catch (e) { showToast('ลบไม่สำเร็จ: ' + e.message, true); }
+  });
+}
+
 /* ---------------- Users tab (admin) ---------------- */
 function renderUserList() {
   const wrap = document.getElementById('userList');
@@ -1632,7 +2150,7 @@ function renderUserList() {
   wrap.innerHTML = appUsers.map(u => `
     <div class="user-row">
       <div>
-        <div class="uname">${escapeHtml(u.displayName)} <span class="role-badge ${u.role}">${u.role === 'admin' ? 'แอดมิน' : 'เซลล์'}</span></div>
+        <div class="uname">${escapeHtml(u.displayName)} <span class="role-badge ${u.role}">${roleLabel(u.role)}</span></div>
         <div class="urole">username: ${escapeHtml(u.username)}</div>
       </div>
       <div class="row-actions">
