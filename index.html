@@ -302,6 +302,19 @@
   .role-badge.sales { background: var(--line-soft); color: var(--ink-soft); }
   .role-badge.editor { background: #E3E8FD; color: #2D4A9E; }
   .table-wrap select, .table-wrap input[type=date] { font-family: inherit; font-size: 12.5px; padding: 5px 7px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); max-width: 180px; }
+  .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+  .calendar-dow { font-size: 11.5px; font-weight: 700; color: var(--ink-faint); text-align: center; padding: 4px 0; }
+  .calendar-cell { min-height: 84px; border: 1px solid var(--line); border-radius: 8px; padding: 7px; background: var(--surface); cursor: pointer; display: flex; flex-direction: column; gap: 4px; }
+  .calendar-cell:hover { border-color: var(--steel); }
+  .calendar-cell.empty { background: transparent; border: none; cursor: default; }
+  .calendar-cell.today .calendar-daynum { color: #C97F00; }
+  .calendar-daynum { font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+  .calendar-entry-car { font-size: 11.5px; font-weight: 600; background: var(--line-soft); border-radius: 5px; padding: 2px 6px; align-self: flex-start; }
+  .calendar-entry-clip { font-size: 10.5px; color: var(--ink-faint); }
+  @media (max-width: 720px) {
+    .calendar-cell { min-height: 64px; padding: 5px; }
+    .calendar-entry-clip { display: none; }
+  }
   .user-add-form { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; margin: 14px 0 20px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px; }
   .user-add-form .field { margin-bottom: 0; min-width: 140px; flex: 1; }
 
@@ -597,7 +610,7 @@
                 <th>ชื่อวิดีโอ</th>
                 <th>สถานะ</th>
                 <th>Planner</th>
-                <th>ลงช่อง</th>
+                <th>Approval</th>
                 <th>VDO</th>
                 <th>วันที่สร้าง</th>
                 <th>วันที่เสร็จ</th>
@@ -619,49 +632,56 @@
         <div class="topbar-row">
           <div>
             <h2>แผนการลงคลิป / โพสรายสัปดาห์</h2>
-            <p class="sub">วางแผนวันที่จะโพส ผูกกับรหัสรถ และเลือกคลิปที่ตัดต่อเสร็จแล้วมาลง</p>
+            <p class="sub">คลิกวันที่ในปฏิทินเพื่อกำหนดรหัสรถและคลิปที่จะโพสของวันนั้น</p>
           </div>
         </div>
       </div>
       <div class="content">
-        <div class="car-add-form">
-          <div class="field">
-            <label>วันที่จะโพส</label>
-            <input type="date" id="newPostDate">
-          </div>
-          <div class="field">
-            <label>โพส (รหัสรถ)</label>
-            <select id="newPostCar"></select>
-          </div>
-          <div class="field">
-            <label>คลิป 1</label>
-            <select id="newPostClip1"></select>
-          </div>
-          <div class="field">
-            <label>คลิป 2</label>
-            <select id="newPostClip2"></select>
-          </div>
-          <button class="btn btn-primary" onclick="addWeeklyPostFromTab()">+ เพิ่มแผนโพส</button>
+        <div class="month-bar">
+          <button class="icon-btn" title="เดือนก่อนหน้า" onclick="changePostPlanMonth(-1)">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <div class="month-label" id="postPlanMonthLabel">—</div>
+          <button class="icon-btn" title="เดือนถัดไป" onclick="changePostPlanMonth(1)">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <button class="btn btn-ghost btn-sm hidden" id="postPlanBackToCurrentBtn" onclick="goToCurrentPostPlanMonth()">กลับเดือนปัจจุบัน</button>
         </div>
-        <div class="table-wrap" style="margin-top:16px;">
-          <table>
-            <thead>
-              <tr>
-                <th>วันที่จะโพส</th>
-                <th>โพส (รหัสรถ)</th>
-                <th>คลิป 1</th>
-                <th>คลิป 2</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody id="postplanTableBody"></tbody>
-          </table>
-        </div>
-        <div class="muted" id="postplanEmptyState" style="padding:16px 2px; display:none;">ยังไม่มีแผนโพสในระบบ เพิ่มรายการแรกด้านบนได้เลย</div>
+        <div class="calendar-grid" id="postPlanCalendarGrid"></div>
       </div>
     </div>
 
   </main>
+</div>
+
+<!-- day plan modal -->
+<div class="overlay" id="dayPlanOverlay" style="justify-content:center; align-items:center;">
+  <div class="drawer" style="width:min(420px,92%); height:auto; max-height:88vh; border-radius:12px;">
+    <div class="drawer-head">
+      <h3 id="dayPlanTitle">แผนโพสวันที่ —</h3>
+      <button class="drawer-close" onclick="closeDayPlan()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="drawer-body">
+      <div class="field">
+        <label>โพส (รหัสรถ)</label>
+        <select id="dp_car"></select>
+      </div>
+      <div class="field">
+        <label>คลิป 1</label>
+        <select id="dp_clip1"></select>
+      </div>
+      <div class="field">
+        <label>คลิป 2</label>
+        <select id="dp_clip2"></select>
+      </div>
+      <div style="display:flex; gap:10px; margin-top:16px;">
+        <button class="btn btn-primary" onclick="saveDayPlan()">บันทึก</button>
+        <button class="btn btn-ghost" id="dp_deleteBtn" onclick="deleteDayPlan()">ลบแผนวันนี้</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- Case drawer -->
@@ -860,7 +880,11 @@ const STATUSES = [
 const CHANNELS = ['ตลาดรถ', 'TikTok', 'Facebook', 'Instagram', 'One2Car', 'นายหน้า', 'น้ำ', 'บี', 'Walk-in', 'อื่นๆ'];
 const SOLD_STATUS = 'ขายแล้ว';
 const VIDEO_STATUS_EDITING = 'กำลังตัดต่อ';
+const VIDEO_STATUS_REVIEW = 'รอตรวจ';
 const VIDEO_STATUS_DONE = 'เสร็จแล้ว';
+const APPROVAL_PENDING = 'ยังไม่ตรวจ';
+const APPROVAL_PASS = 'ผ่าน';
+const APPROVAL_REVISE = 'ต้องแก้';
 const PLAN_NOT_POSTED = 'ยังไม่ลง';
 const PLAN_POSTED = 'ลงแล้ว';
 const SESSION_KEY = 'nc_session_v1';
@@ -893,9 +917,9 @@ function rowToBroker(r) { return { id: r.code, code: r.code, nickname: r.nicknam
 function rowToVideo(r) {
   return {
     id: r.id, code: r.code, title: r.title, status: r.status,
-    plannerStatus: r.planner_status, channelStatus: r.channel_status,
+    plannerStatus: r.planner_status, approvalStatus: r.approval_status || APPROVAL_PENDING,
     link: r.link, note: r.note,
-    createdAt: r.created_at, completedAt: r.completed_at || null, publishedAt: r.published_at || null,
+    createdAt: r.created_at, completedAt: r.completed_at || null,
   };
 }
 function rowToWeeklyPost(r) {
@@ -1129,7 +1153,7 @@ async function reloadVideos() {
     videos = data.map(rowToVideo).sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true, sensitivity: 'base' }));
     renderVideoList();
     populatePostPlanSelects();
-    renderWeeklyPostList();
+    renderPostPlanCalendar();
   } catch (e) { showToast('โหลดข้อมูลวิดีโอไม่สำเร็จ: ' + e.message, true); }
 }
 async function reloadWeeklyPosts() {
@@ -1137,7 +1161,7 @@ async function reloadWeeklyPosts() {
     const { data, error } = await sb.from('weekly_posts').select('*').order('post_date', { ascending: true });
     if (error) throw error;
     weeklyPosts = data.map(rowToWeeklyPost);
-    renderWeeklyPostList();
+    renderPostPlanCalendar();
   } catch (e) { showToast('โหลดข้อมูลแผนโพสไม่สำเร็จ: ' + e.message, true); }
 }
 async function reloadBrokers() {
@@ -1811,7 +1835,7 @@ async function addVideoFromTab() {
   const code = nextVideoCode();
   try {
     const { error } = await sb.from('videos').insert({
-      code, title, status: VIDEO_STATUS_EDITING, planner_status: PLAN_NOT_POSTED, channel_status: PLAN_NOT_POSTED,
+      code, title, status: VIDEO_STATUS_EDITING, planner_status: PLAN_NOT_POSTED, approval_status: APPROVAL_PENDING,
       link: linkEl.value.trim(), note: noteEl.value.trim(), created_at: Date.now(),
     });
     if (error) throw error;
@@ -1824,23 +1848,39 @@ async function addVideoFromTab() {
 async function toggleVideoStatus(id) {
   const v = videos.find(x => x.id === id);
   if (!v) return;
-  const newStatus = v.status === VIDEO_STATUS_DONE ? VIDEO_STATUS_EDITING : VIDEO_STATUS_DONE;
+  let newStatus;
+  if (isAdmin()) {
+    const order = [VIDEO_STATUS_EDITING, VIDEO_STATUS_REVIEW, VIDEO_STATUS_DONE];
+    const idx = order.indexOf(v.status);
+    newStatus = order[(idx + 1) % order.length];
+  } else {
+    if (v.status === VIDEO_STATUS_DONE) { showToast('วิดีโอนี้ผ่านการตรวจแล้ว รอแอดมินเปลี่ยนผลตรวจหากต้องแก้ไขใหม่', true); return; }
+    newStatus = v.status === VIDEO_STATUS_EDITING ? VIDEO_STATUS_REVIEW : VIDEO_STATUS_EDITING;
+  }
   try {
     const { error } = await sb.from('videos').update({ status: newStatus, completed_at: newStatus === VIDEO_STATUS_DONE ? Date.now() : null }).eq('id', id);
     if (error) throw error;
-    showToast(newStatus === VIDEO_STATUS_DONE ? v.code + ' ตัดต่อเสร็จแล้ว' : 'เปลี่ยน ' + v.code + ' กลับเป็นกำลังตัดต่อ');
+    showToast('อัปเดตสถานะ ' + v.code + ' เป็น ' + newStatus);
     reloadVideos();
   } catch (e) { showToast('อัปเดตไม่สำเร็จ: ' + e.message, true); }
 }
 
-async function toggleVideoChannelStatus(id) {
+async function setVideoApproval(id, newApproval) {
+  if (!isAdmin()) return;
   const v = videos.find(x => x.id === id);
   if (!v) return;
-  const newStatus = v.channelStatus === PLAN_POSTED ? PLAN_NOT_POSTED : PLAN_POSTED;
+  const patch = { approval_status: newApproval };
+  if (newApproval === APPROVAL_PASS) {
+    patch.status = VIDEO_STATUS_DONE;
+    patch.completed_at = Date.now();
+  } else if (newApproval === APPROVAL_REVISE) {
+    patch.status = VIDEO_STATUS_EDITING;
+    patch.completed_at = null;
+  }
   try {
-    const { error } = await sb.from('videos').update({ channel_status: newStatus, published_at: newStatus === PLAN_POSTED ? Date.now() : null }).eq('id', id);
+    const { error } = await sb.from('videos').update(patch).eq('id', id);
     if (error) throw error;
-    showToast(newStatus === PLAN_POSTED ? v.code + ' ลงช่องแล้ว' : 'ยกเลิกสถานะลงช่องของ ' + v.code);
+    showToast('อัปเดตผลตรวจของ ' + v.code + ' เป็น ' + newApproval);
     reloadVideos();
   } catch (e) { showToast('อัปเดตไม่สำเร็จ: ' + e.message, true); }
 }
@@ -1862,6 +1902,11 @@ function setVideoFilter(key) {
   renderVideoList();
 }
 
+function videoPostDate(videoId) {
+  const post = weeklyPosts.find(p => p.clip1VideoId === videoId || p.clip2VideoId === videoId);
+  return post ? post.postDate : null;
+}
+
 function renderVideoList() {
   const filterBar = document.getElementById('videoFilterBar');
   const tbody = document.getElementById('videoTableBody');
@@ -1871,14 +1916,16 @@ function renderVideoList() {
   const counts = {
     all: videos.length,
     editing: videos.filter(v => v.status === VIDEO_STATUS_EDITING).length,
+    review: videos.filter(v => v.status === VIDEO_STATUS_REVIEW).length,
     done: videos.filter(v => v.status === VIDEO_STATUS_DONE).length,
   };
-  const chips = [['all', 'ทั้งหมด'], ['editing', 'กำลังตัดต่อ'], ['done', 'เสร็จแล้ว']];
+  const chips = [['all', 'ทั้งหมด'], ['editing', 'กำลังตัดต่อ'], ['review', 'รอตรวจ'], ['done', 'เสร็จแล้ว']];
   filterBar.innerHTML = chips.map(([key, label]) => `
     <button class="car-filter-chip ${videoFilter === key ? 'active' : ''}" onclick="setVideoFilter('${key}')">${label} (${counts[key]})</button>
   `).join('');
 
-  const filtered = videos.filter(v => videoFilter === 'all' || (videoFilter === 'editing' ? v.status === VIDEO_STATUS_EDITING : v.status === VIDEO_STATUS_DONE));
+  const statusMap = { editing: VIDEO_STATUS_EDITING, review: VIDEO_STATUS_REVIEW, done: VIDEO_STATUS_DONE };
+  const filtered = videos.filter(v => videoFilter === 'all' || v.status === statusMap[videoFilter]);
 
   if (filtered.length === 0) {
     tbody.innerHTML = '';
@@ -1887,21 +1934,28 @@ function renderVideoList() {
   }
   if (empty) empty.style.display = 'none';
 
+  const APPROVAL_STATES = [APPROVAL_PENDING, APPROVAL_PASS, APPROVAL_REVISE];
+  const APPROVAL_COLORS = { [APPROVAL_PENDING]: '#6B7280', [APPROVAL_PASS]: '#157F3C', [APPROVAL_REVISE]: '#DC6803' };
+  const STATUS_COLORS = { [VIDEO_STATUS_EDITING]: '#C97F00', [VIDEO_STATUS_REVIEW]: '#2563EB', [VIDEO_STATUS_DONE]: '#157F3C' };
+
   tbody.innerHTML = filtered.map(v => {
-    const statusColor = v.status === VIDEO_STATUS_DONE ? '#157F3C' : '#C97F00';
+    const statusColor = STATUS_COLORS[v.status] || '#6B7280';
     const plannerColor = v.plannerStatus === PLAN_POSTED ? '#157F3C' : '#6B7280';
-    const channelColor = v.channelStatus === PLAN_POSTED ? '#157F3C' : '#6B7280';
+    const approvalColor = APPROVAL_COLORS[v.approvalStatus] || '#6B7280';
+    const approvalCell = isAdmin()
+      ? `<select onchange="setVideoApproval('${v.id}', this.value)">${APPROVAL_STATES.map(s => `<option value="${s}" ${s === v.approvalStatus ? 'selected' : ''}>${s}</option>`).join('')}</select>`
+      : `<span class="badge" style="background:${approvalColor}18; color:${approvalColor};"><span class="dot"></span>${escapeHtml(v.approvalStatus)}</span>`;
     return `
       <tr>
         <td><span class="code-badge">${escapeHtml(v.code)}</span></td>
         <td>${escapeHtml(v.title)}</td>
         <td><button class="badge" style="background:${statusColor}18; color:${statusColor}; border:none; cursor:pointer;" onclick="toggleVideoStatus('${v.id}')"><span class="dot"></span>${escapeHtml(v.status)}</button></td>
         <td><span class="badge" style="background:${plannerColor}18; color:${plannerColor};"><span class="dot"></span>${escapeHtml(v.plannerStatus)}</span></td>
-        <td><button class="badge" style="background:${channelColor}18; color:${channelColor}; border:none; cursor:pointer;" onclick="toggleVideoChannelStatus('${v.id}')"><span class="dot"></span>${escapeHtml(v.channelStatus)}</button></td>
+        <td>${approvalCell}</td>
         <td>${v.link ? `<a href="${escapeHtml(v.link)}" target="_blank" rel="noopener" class="phone-link">เปิดลิงก์</a>` : '<span class="muted">—</span>'}</td>
         <td class="muted">${fmtDate(v.createdAt)}</td>
         <td class="muted">${fmtDate(v.completedAt)}</td>
-        <td class="muted">${fmtDate(v.publishedAt)}</td>
+        <td class="muted">${fmtDate(videoPostDate(v.id))}</td>
         <td class="muted">${escapeHtml(v.note || '—')}</td>
         <td>
           <button class="icon-btn danger" title="ลบ" onclick="askDeleteVideo('${v.id}')">
@@ -1923,123 +1977,135 @@ function clipSelectOptionsHtml(currentVideoId) {
     opts.map(v => `<option value="${v.id}" ${v.id === currentVideoId ? 'selected' : ''}>${escapeHtml(v.code)} — ${escapeHtml(v.title)}</option>`).join('');
 }
 function carSelectOptionsHtml(currentCode) {
+  const available = cars.filter(c => carDisplayStatus(c) !== 'sold' || c.code === currentCode);
   return '<option value="">— เลือกรหัสรถ —</option>' +
-    cars.map(c => `<option value="${escapeHtml(c.code)}" ${c.code === currentCode ? 'selected' : ''}>${escapeHtml(c.code)} — ${escapeHtml(c.model)}${c.sold ? ' (ขายแล้ว)' : ''}</option>`).join('');
+    available.map(c => `<option value="${escapeHtml(c.code)}" ${c.code === currentCode ? 'selected' : ''}>${escapeHtml(c.code)} — ${escapeHtml(c.model)}${c.sold ? ' (ขายแล้ว)' : ''}</option>`).join('');
 }
 function populatePostPlanSelects() {
-  const carSel = document.getElementById('newPostCar');
-  if (carSel) { const cur = carSel.value; carSel.innerHTML = carSelectOptionsHtml(''); if (cur) carSel.value = cur; }
-  const clip1Sel = document.getElementById('newPostClip1');
-  if (clip1Sel) { const cur = clip1Sel.value; clip1Sel.innerHTML = clipSelectOptionsHtml(''); if (cur) clip1Sel.value = cur; }
-  const clip2Sel = document.getElementById('newPostClip2');
-  if (clip2Sel) { const cur = clip2Sel.value; clip2Sel.innerHTML = clipSelectOptionsHtml(''); if (cur) clip2Sel.value = cur; }
+  // เผื่อไว้สำหรับปุ่ม/ฟอร์มอื่นในอนาคต — ตอนนี้ dropdown ของแต่ละวันถูกเติมตอนเปิด modal (openDayPlan) แทน
 }
 
-async function addWeeklyPostFromTab() {
-  const dateEl = document.getElementById('newPostDate');
-  const carSel = document.getElementById('newPostCar');
-  const clip1Sel = document.getElementById('newPostClip1');
-  const clip2Sel = document.getElementById('newPostClip2');
-  const dateVal = dateEl.value;
-  if (!dateVal) { showToast('กรุณาเลือกวันที่จะโพส', true); return; }
-  const postDate = new Date(dateVal + 'T00:00:00').getTime();
-  const carCode = carSel.value || null;
-  const clip1Id = clip1Sel.value || null;
-  const clip2Id = clip2Sel.value || null;
+let postPlanMonth = currentMonthKey();
+let dayPlanDate = null; // 'YYYY-MM-DD'
+let dayPlanEntryId = null;
+const DOW_LABELS_TH = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'];
+
+function localDateStr(ms) {
+  const d = new Date(ms);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function videoCodeOf(id) {
+  const v = videos.find(x => x.id === id);
+  return v ? v.code : '—';
+}
+
+function changePostPlanMonth(delta) {
+  postPlanMonth = shiftMonthKey(postPlanMonth, delta);
+  renderPostPlanCalendar();
+}
+function goToCurrentPostPlanMonth() {
+  postPlanMonth = currentMonthKey();
+  renderPostPlanCalendar();
+}
+
+function renderPostPlanCalendar() {
+  const labelEl = document.getElementById('postPlanMonthLabel');
+  const gridEl = document.getElementById('postPlanCalendarGrid');
+  const backBtn = document.getElementById('postPlanBackToCurrentBtn');
+  if (!gridEl) return;
+  labelEl.textContent = monthKeyLabel(postPlanMonth);
+  backBtn.classList.toggle('hidden', postPlanMonth === currentMonthKey());
+
+  const [y, m] = postPlanMonth.split('-').map(Number);
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const startDow = new Date(y, m - 1, 1).getDay();
+  const todayKey = localDateStr(Date.now());
+
+  let cells = DOW_LABELS_TH.map(d => `<div class="calendar-dow">${d}</div>`).join('');
+  for (let i = 0; i < startDow; i++) cells += '<div class="calendar-cell empty"></div>';
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateKeyStr = y + '-' + String(m).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+    const entry = weeklyPosts.find(p => p.postDate && localDateStr(p.postDate) === dateKeyStr);
+    const isToday = dateKeyStr === todayKey;
+    cells += `
+      <div class="calendar-cell ${isToday ? 'today' : ''}" onclick="openDayPlan('${dateKeyStr}')">
+        <div class="calendar-daynum">${d}</div>
+        ${entry ? `
+          <div class="calendar-entry-car">${escapeHtml(entry.carCode || 'ยังไม่เลือกรถ')}</div>
+          ${entry.clip1VideoId ? `<div class="calendar-entry-clip">คลิป1: ${escapeHtml(videoCodeOf(entry.clip1VideoId))}</div>` : ''}
+          ${entry.clip2VideoId ? `<div class="calendar-entry-clip">คลิป2: ${escapeHtml(videoCodeOf(entry.clip2VideoId))}</div>` : ''}
+        ` : ''}
+      </div>
+    `;
+  }
+  gridEl.innerHTML = cells;
+}
+
+function openDayPlan(dateKeyStr) {
+  dayPlanDate = dateKeyStr;
+  const entry = weeklyPosts.find(p => p.postDate && localDateStr(p.postDate) === dateKeyStr);
+  dayPlanEntryId = entry ? entry.id : null;
+  const [y, m, d] = dateKeyStr.split('-').map(Number);
+  const label = new Date(y, m - 1, d).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric', weekday: 'long' });
+  document.getElementById('dayPlanTitle').textContent = 'แผนโพสวันที่ ' + label;
+  document.getElementById('dp_car').innerHTML = carSelectOptionsHtml(entry ? entry.carCode : '');
+  document.getElementById('dp_clip1').innerHTML = clipSelectOptionsHtml(entry ? entry.clip1VideoId : '');
+  document.getElementById('dp_clip2').innerHTML = clipSelectOptionsHtml(entry ? entry.clip2VideoId : '');
+  document.getElementById('dp_deleteBtn').classList.toggle('hidden', !entry);
+  document.getElementById('dayPlanOverlay').classList.add('open');
+}
+function closeDayPlan() {
+  document.getElementById('dayPlanOverlay').classList.remove('open');
+  dayPlanDate = null;
+  dayPlanEntryId = null;
+}
+
+async function saveDayPlan() {
+  const carCode = document.getElementById('dp_car').value || null;
+  const clip1Id = document.getElementById('dp_clip1').value || null;
+  const clip2Id = document.getElementById('dp_clip2').value || null;
+  const [y, m, d] = dayPlanDate.split('-').map(Number);
+  const postDate = new Date(y, m - 1, d).getTime();
   try {
-    const { error } = await sb.from('weekly_posts').insert({
-      post_date: postDate, car_code: carCode, clip1_video_id: clip1Id, clip2_video_id: clip2Id, created_at: Date.now(),
-    });
-    if (error) throw error;
+    let oldClip1 = null, oldClip2 = null;
+    if (dayPlanEntryId) {
+      const existing = weeklyPosts.find(p => p.id === dayPlanEntryId);
+      if (existing) { oldClip1 = existing.clip1VideoId; oldClip2 = existing.clip2VideoId; }
+      const { error } = await sb.from('weekly_posts').update({ post_date: postDate, car_code: carCode, clip1_video_id: clip1Id, clip2_video_id: clip2Id }).eq('id', dayPlanEntryId);
+      if (error) throw error;
+    } else {
+      const { error } = await sb.from('weekly_posts').insert({ post_date: postDate, car_code: carCode, clip1_video_id: clip1Id, clip2_video_id: clip2Id, created_at: Date.now() });
+      if (error) throw error;
+    }
+    if (oldClip1 && oldClip1 !== clip1Id) await sb.from('videos').update({ planner_status: PLAN_NOT_POSTED }).eq('id', oldClip1);
+    if (oldClip2 && oldClip2 !== clip2Id) await sb.from('videos').update({ planner_status: PLAN_NOT_POSTED }).eq('id', oldClip2);
     if (clip1Id) await sb.from('videos').update({ planner_status: PLAN_POSTED }).eq('id', clip1Id);
     if (clip2Id) await sb.from('videos').update({ planner_status: PLAN_POSTED }).eq('id', clip2Id);
-    dateEl.value = ''; carSel.value = ''; clip1Sel.value = ''; clip2Sel.value = '';
-    showToast('เพิ่มแผนโพสแล้ว');
+    showToast('บันทึกแผนโพสแล้ว');
+    closeDayPlan();
     reloadWeeklyPosts();
     reloadVideos();
   } catch (e) { showToast('บันทึกไม่สำเร็จ: ' + e.message, true); }
 }
 
-async function updateWeeklyPostDate(id, dateVal) {
-  if (!dateVal) return;
-  const postDate = new Date(dateVal + 'T00:00:00').getTime();
-  try {
-    const { error } = await sb.from('weekly_posts').update({ post_date: postDate }).eq('id', id);
-    if (error) throw error;
-    reloadWeeklyPosts();
-  } catch (e) { showToast('อัปเดตไม่สำเร็จ: ' + e.message, true); }
-}
-
-async function updateWeeklyPostCar(id, carCode) {
-  try {
-    const { error } = await sb.from('weekly_posts').update({ car_code: carCode || null }).eq('id', id);
-    if (error) throw error;
-    reloadWeeklyPosts();
-  } catch (e) { showToast('อัปเดตไม่สำเร็จ: ' + e.message, true); }
-}
-
-async function updateWeeklyPostClip(id, clipNum, newVideoId) {
-  const post = weeklyPosts.find(p => p.id === id);
-  if (!post) return;
-  const field = clipNum === 1 ? 'clip1_video_id' : 'clip2_video_id';
-  const oldVideoId = clipNum === 1 ? post.clip1VideoId : post.clip2VideoId;
-  try {
-    const { error } = await sb.from('weekly_posts').update({ [field]: newVideoId || null }).eq('id', id);
-    if (error) throw error;
-    if (oldVideoId && oldVideoId !== newVideoId) await sb.from('videos').update({ planner_status: PLAN_NOT_POSTED }).eq('id', oldVideoId);
-    if (newVideoId) await sb.from('videos').update({ planner_status: PLAN_POSTED }).eq('id', newVideoId);
-    showToast('อัปเดตแผนโพสแล้ว');
-    reloadWeeklyPosts();
-    reloadVideos();
-  } catch (e) { showToast('อัปเดตไม่สำเร็จ: ' + e.message, true); }
-}
-
-function askDeleteWeeklyPost(id) {
-  const post = weeklyPosts.find(p => p.id === id);
-  openConfirm('ลบแผนโพสนี้?', 'คลิปที่เคยผูกไว้กับแผนนี้จะกลับไปเป็น "ยังไม่ลง" และเลือกไปใช้ในแผนอื่นได้อีก', async () => {
+function deleteDayPlan() {
+  if (!dayPlanEntryId) { closeDayPlan(); return; }
+  const id = dayPlanEntryId;
+  const entry = weeklyPosts.find(p => p.id === id);
+  openConfirm('ลบแผนโพสวันนี้?', 'คลิปที่เคยผูกไว้จะกลับไปเป็น "ยังไม่ลง" และเลือกไปใช้ในแผนอื่นได้อีก', async () => {
     try {
       const { error } = await sb.from('weekly_posts').delete().eq('id', id);
       if (error) throw error;
-      if (post) {
-        if (post.clip1VideoId) await sb.from('videos').update({ planner_status: PLAN_NOT_POSTED }).eq('id', post.clip1VideoId);
-        if (post.clip2VideoId) await sb.from('videos').update({ planner_status: PLAN_NOT_POSTED }).eq('id', post.clip2VideoId);
+      if (entry) {
+        if (entry.clip1VideoId) await sb.from('videos').update({ planner_status: PLAN_NOT_POSTED }).eq('id', entry.clip1VideoId);
+        if (entry.clip2VideoId) await sb.from('videos').update({ planner_status: PLAN_NOT_POSTED }).eq('id', entry.clip2VideoId);
       }
       showToast('ลบแผนโพสแล้ว');
+      closeDayPlan();
       reloadWeeklyPosts();
       reloadVideos();
     } catch (e) { showToast('ลบไม่สำเร็จ: ' + e.message, true); }
   });
-}
-
-function renderWeeklyPostList() {
-  const tbody = document.getElementById('postplanTableBody');
-  const empty = document.getElementById('postplanEmptyState');
-  if (!tbody) return;
-  if (weeklyPosts.length === 0) {
-    tbody.innerHTML = '';
-    if (empty) empty.style.display = 'block';
-    return;
-  }
-  if (empty) empty.style.display = 'none';
-
-  const rows = weeklyPosts.slice().sort((a, b) => (a.postDate || 0) - (b.postDate || 0));
-
-  tbody.innerHTML = rows.map(p => {
-    const dateVal = p.postDate ? new Date(p.postDate).toISOString().slice(0, 10) : '';
-    return `
-      <tr>
-        <td><input type="date" value="${dateVal}" onchange="updateWeeklyPostDate('${p.id}', this.value)"></td>
-        <td><select onchange="updateWeeklyPostCar('${p.id}', this.value)">${carSelectOptionsHtml(p.carCode)}</select></td>
-        <td><select onchange="updateWeeklyPostClip('${p.id}', 1, this.value)">${clipSelectOptionsHtml(p.clip1VideoId)}</select></td>
-        <td><select onchange="updateWeeklyPostClip('${p.id}', 2, this.value)">${clipSelectOptionsHtml(p.clip2VideoId)}</select></td>
-        <td>
-          <button class="icon-btn danger" title="ลบ" onclick="askDeleteWeeklyPost('${p.id}')">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2m2 0v14a1 1 0 01-1 1H7a1 1 0 01-1-1V6h12z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </button>
-        </td>
-      </tr>
-    `;
-  }).join('');
 }
 
 /* ---------------- Users tab (admin) ---------------- */
