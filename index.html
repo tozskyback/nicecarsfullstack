@@ -601,6 +601,10 @@
           </div>
           <button class="btn btn-primary" onclick="addVideoFromTab()">+ เพิ่มวิดีโอ</button>
         </div>
+        <div class="summary-block" style="margin-top:20px;">
+          <div class="summary-heading">รถที่เคยเลือกโพสล่าสุด (เฉพาะรถที่ยังไม่ขาย)</div>
+          <div id="carPostSummary"></div>
+        </div>
         <div class="car-filter-bar" id="videoFilterBar"></div>
         <div class="table-wrap" style="margin-top:16px;">
           <table>
@@ -1144,6 +1148,7 @@ async function reloadCars() {
     renderCarList();
     populateCarSelect();
     populatePostPlanSelects();
+    renderCarPostSummary();
   } catch (e) { showToast('โหลดข้อมูลรหัสรถไม่สำเร็จ: ' + e.message, true); }
 }
 async function reloadVideos() {
@@ -1162,6 +1167,7 @@ async function reloadWeeklyPosts() {
     if (error) throw error;
     weeklyPosts = data.map(rowToWeeklyPost);
     renderPostPlanCalendar();
+    renderCarPostSummary();
   } catch (e) { showToast('โหลดข้อมูลแผนโพสไม่สำเร็จ: ' + e.message, true); }
 }
 async function reloadBrokers() {
@@ -1905,6 +1911,35 @@ function setVideoFilter(key) {
 function videoPostDate(videoId) {
   const post = weeklyPosts.find(p => p.clip1VideoId === videoId || p.clip2VideoId === videoId);
   return post ? post.postDate : null;
+}
+
+function renderCarPostSummary() {
+  const wrap = document.getElementById('carPostSummary');
+  if (!wrap) return;
+  const lastByCarCode = {};
+  weeklyPosts.forEach(p => {
+    if (!p.carCode || !p.postDate) return;
+    if (!lastByCarCode[p.carCode] || p.postDate > lastByCarCode[p.carCode]) lastByCarCode[p.carCode] = p.postDate;
+  });
+  const rows = Object.entries(lastByCarCode)
+    .map(([code, date]) => ({ code, date, car: cars.find(c => c.code === code) }))
+    .filter(r => r.car && carDisplayStatus(r.car) !== 'sold')
+    .sort((a, b) => b.date - a.date);
+
+  if (rows.length === 0) {
+    wrap.innerHTML = '<div class="muted" style="padding:4px 2px;">ยังไม่มีรถที่เคยเลือกโพส (เฉพาะรถที่ยังไม่ขาย)</div>';
+    return;
+  }
+  wrap.innerHTML = `
+    <div class="car-list">
+      ${rows.map(r => `
+        <div class="car-row">
+          <div><span class="code-badge">${escapeHtml(r.code)}</span> ${escapeHtml(r.car.model)}</div>
+          <div class="muted">โพสล่าสุด ${fmtDate(r.date)}</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
 }
 
 function renderVideoList() {
