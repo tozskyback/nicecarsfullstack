@@ -658,6 +658,25 @@
   </main>
 </div>
 
+<!-- case notes modal (admin only) -->
+<div class="overlay" id="caseNotesOverlay" style="justify-content:center; align-items:center;" onclick="if(event.target===this) closeCaseNotes()">
+  <div class="drawer" style="width:min(460px,92%); height:auto; max-height:88vh; border-radius:12px;">
+    <div class="drawer-head">
+      <h3 id="caseNotesTitle">หมายเหตุเพิ่มเติม</h3>
+      <button class="drawer-close" onclick="closeCaseNotes()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="drawer-body">
+      <div id="caseNotesBody" style="white-space:pre-wrap; word-break:break-word; font-size:14px; line-height:1.6;"></div>
+      <div style="display:flex; gap:10px; margin-top:16px;">
+        <button class="btn btn-primary" onclick="copyCaseNotes()">คัดลอก</button>
+        <button class="btn btn-ghost" onclick="closeCaseNotes()">ปิด</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- day plan modal -->
 <div class="overlay" id="dayPlanOverlay" style="justify-content:center; align-items:center;">
   <div class="drawer" style="width:min(420px,92%); height:auto; max-height:88vh; border-radius:12px;">
@@ -1539,6 +1558,9 @@ function renderTable() {
         <td><span class="badge" style="background:${st.color}18; color:${st.color};"><span class="dot"></span>${escapeHtml(st.key)}</span></td>
         <td onclick="event.stopPropagation()">
           <div class="row-actions">
+            ${isAdmin() ? `<button class="icon-btn" title="ดูหมายเหตุเพิ่มเติม" onclick="openCaseNotes('${c.id}')">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/></svg>
+            </button>` : ''}
             <button class="icon-btn" title="แก้ไข" onclick="openCaseDrawer('${c.id}')">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 20h9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
             </button>
@@ -1550,6 +1572,45 @@ function renderTable() {
       </tr>
     `;
   }).join('');
+}
+
+/* ---------------- Case notes viewer (admin only) ---------------- */
+let caseNotesCopyText = '';
+
+function openCaseNotes(id) {
+  if (!isAdmin()) return;
+  const c = cases.find(x => x.id === id);
+  if (!c) return;
+  const notes = (c.notes || '').trim();
+  const lines = ['รหัสเคส: ' + (c.caseCode || '—'), 'รหัสรถ: ' + (c.carCode || '—')];
+  if (c.brokerCode) lines.push('รหัสนายหน้า: ' + c.brokerCode);
+  lines.push('หมายเหตุเพิ่มเติม: ' + (notes || '—'));
+  caseNotesCopyText = lines.join('\n');
+
+  document.getElementById('caseNotesTitle').textContent = 'หมายเหตุเพิ่มเติม · ' + (c.caseCode || '');
+  const body = document.getElementById('caseNotesBody');
+  if (notes) { body.textContent = notes; body.style.color = ''; }
+  else { body.textContent = 'ไม่มีหมายเหตุเพิ่มเติมในเคสนี้'; body.style.color = 'var(--ink-faint)'; }
+  document.getElementById('caseNotesOverlay').classList.add('open');
+}
+function closeCaseNotes() {
+  document.getElementById('caseNotesOverlay').classList.remove('open');
+}
+async function copyCaseNotes() {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(caseNotesCopyText);
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = caseNotesCopyText;
+      ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+    showToast('คัดลอกแล้ว');
+  } catch (e) { showToast('คัดลอกไม่สำเร็จ: ' + e.message, true); }
 }
 
 function escapeHtml(s) {
