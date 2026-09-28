@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>ระบบจัดการเคสลูกค้า</title>
+<title>NICE CARS — ระบบจัดการหลังบ้าน</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
@@ -340,7 +340,7 @@
 <!-- AUTH SCREEN -->
 <div class="auth-screen" id="authScreen">
   <div class="auth-box">
-    <div class="auth-mark">N-CASE // เต็นท์รถมือสอง</div>
+    <div class="auth-mark">NICE CARS</div>
 
     <!-- first-time admin setup -->
     <div id="setupForm" class="hidden">
@@ -373,8 +373,8 @@
 
   <aside class="sidebar">
     <div class="sidebar-brand">
-      <div class="mark">N-CASE // เต็นท์รถมือสอง</div>
-      <h1>ระบบจัดการเคสลูกค้า</h1>
+      <div class="mark">NICE CARS</div>
+      <h1>ระบบจัดการหลังบ้าน</h1>
     </div>
     <nav class="sidebar-nav">
       <button class="nav-item active" id="casesNavItem" data-tab="cases" onclick="switchTab('cases')"><span class="dot"></span>เคสลูกค้า</button>
@@ -658,6 +658,25 @@
   </main>
 </div>
 
+<!-- case notes modal (admin only) -->
+<div class="overlay" id="caseNotesOverlay" style="justify-content:center; align-items:center;" onclick="if(event.target===this) closeCaseNotes()">
+  <div class="drawer" style="width:min(460px,92%); height:auto; max-height:88vh; border-radius:12px;">
+    <div class="drawer-head">
+      <h3 id="caseNotesTitle">ความคืบหน้า</h3>
+      <button class="drawer-close" onclick="closeCaseNotes()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="drawer-body">
+      <div id="caseNotesBody" style="white-space:pre-wrap; word-break:break-word; font-size:14px; line-height:1.6;"></div>
+      <div style="display:flex; gap:10px; margin-top:16px;">
+        <button class="btn btn-primary" onclick="copyCaseNotes()">คัดลอก</button>
+        <button class="btn btn-ghost" onclick="closeCaseNotes()">ปิด</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- day plan modal -->
 <div class="overlay" id="dayPlanOverlay" style="justify-content:center; align-items:center;">
   <div class="drawer" style="width:min(420px,92%); height:auto; max-height:88vh; border-radius:12px;">
@@ -784,7 +803,7 @@
       </div>
 
       <div class="field">
-        <label>หมายเหตุเพิ่มเติม</label>
+        <label>ความคืบหน้า</label>
         <textarea id="f_notes" placeholder="อัปเดตความคืบหน้าของเคสนี้…"></textarea>
       </div>
 
@@ -1377,8 +1396,8 @@ function renderSummaryModal(list, title) {
 
   document.getElementById('summaryTitle').textContent = title;
   document.getElementById('summaryTotal').textContent = list.length + ' เคส';
-  document.getElementById('summaryByStatus').innerHTML = pieChartHtml(statusEntries);
-  document.getElementById('summaryByChannel').innerHTML = pieChartHtml(channelEntries);
+  document.getElementById('summaryByStatus').innerHTML = barChartHtml(statusEntries);
+  document.getElementById('summaryByChannel').innerHTML = barChartHtml(channelEntries);
   document.getElementById('summaryBySoldChannel').innerHTML = barChartHtml(soldChannelEntries);
   const salesBlock = document.getElementById('summaryBySalesBlock');
   if (isAdmin()) {
@@ -1424,9 +1443,9 @@ function renderStats() {
   const wrap = document.getElementById('statCards');
   wrap.innerHTML = `
     <div class="stat-card"><div class="num">${total}</div><div class="lbl">เคสทั้งหมด</div></div>
-    <div class="stat-card amber"><div class="num">${tracking}</div><div class="lbl">กำลังติดตาม</div></div>
-    <div class="stat-card amber"><div class="num">${booking}</div><div class="lbl">กำลังติดจอง</div></div>
-    <div class="stat-card success"><div class="num">${sold}</div><div class="lbl">ขายแล้ว</div></div>
+    <div class="stat-card"><div class="num" style="color:${statusMeta('ติดตาม').color}">${tracking}</div><div class="lbl">กำลังติดตาม</div></div>
+    <div class="stat-card"><div class="num" style="color:${statusMeta('ติดจอง').color}">${booking}</div><div class="lbl">กำลังติดจอง</div></div>
+    <div class="stat-card"><div class="num" style="color:${statusMeta(SOLD_STATUS).color}">${sold}</div><div class="lbl">ขายแล้ว</div></div>
     <div class="stat-card"><div class="num">${closed}</div><div class="lbl">ปิดเคส / ยกเลิก</div></div>
   `;
 }
@@ -1539,6 +1558,9 @@ function renderTable() {
         <td><span class="badge" style="background:${st.color}18; color:${st.color};"><span class="dot"></span>${escapeHtml(st.key)}</span></td>
         <td onclick="event.stopPropagation()">
           <div class="row-actions">
+            ${isAdmin() ? `<button class="icon-btn" title="ดูความคืบหน้า" onclick="openCaseNotes('${c.id}')">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/></svg>
+            </button>` : ''}
             <button class="icon-btn" title="แก้ไข" onclick="openCaseDrawer('${c.id}')">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 20h9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
             </button>
@@ -1550,6 +1572,45 @@ function renderTable() {
       </tr>
     `;
   }).join('');
+}
+
+/* ---------------- Case notes viewer (admin only) ---------------- */
+let caseNotesCopyText = '';
+
+function openCaseNotes(id) {
+  if (!isAdmin()) return;
+  const c = cases.find(x => x.id === id);
+  if (!c) return;
+  const notes = (c.notes || '').trim();
+  const lines = ['รหัสเคส: ' + (c.caseCode || '—'), 'รหัสรถ: ' + (c.carCode || '—')];
+  if (c.brokerCode) lines.push('รหัสนายหน้า: ' + c.brokerCode);
+  lines.push('ความคืบหน้า: ' + (notes || '—'));
+  caseNotesCopyText = lines.join('\n');
+
+  document.getElementById('caseNotesTitle').textContent = 'ความคืบหน้า · ' + (c.caseCode || '');
+  const body = document.getElementById('caseNotesBody');
+  if (notes) { body.textContent = notes; body.style.color = ''; }
+  else { body.textContent = 'ไม่มีความคืบหน้าในเคสนี้'; body.style.color = 'var(--ink-faint)'; }
+  document.getElementById('caseNotesOverlay').classList.add('open');
+}
+function closeCaseNotes() {
+  document.getElementById('caseNotesOverlay').classList.remove('open');
+}
+async function copyCaseNotes() {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(caseNotesCopyText);
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = caseNotesCopyText;
+      ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+    showToast('คัดลอกแล้ว');
+  } catch (e) { showToast('คัดลอกไม่สำเร็จ: ' + e.message, true); }
 }
 
 function escapeHtml(s) {
