@@ -1965,7 +1965,7 @@ function askDeleteVideo(id) {
 }
 
 function setVideoFilter(key) {
-  videoFilter = key;
+  videoFilter = (videoFilter === key) ? 'all' : key;
   renderVideoList();
 }
 
@@ -2042,15 +2042,12 @@ function renderVideoList() {
 
   const statusMap = { editing: VIDEO_STATUS_EDITING, review: VIDEO_STATUS_REVIEW, done: VIDEO_STATUS_DONE };
   const needsReviewOnly = isAdmin() && needsReviewOnlyEl && needsReviewOnlyEl.checked;
-  const filtered = videos.filter(v => {
-    if (videoFilter === 'awaiting_planner') {
-      if (!(v.status === VIDEO_STATUS_DONE && v.plannerStatus === PLAN_NOT_POSTED)) return false;
-    } else if (videoFilter !== 'all' && v.status !== statusMap[videoFilter]) {
-      return false;
-    }
-    if (needsReviewOnly && !(v.approvalStatus === APPROVAL_PENDING || v.approvalStatus === APPROVAL_REVISE)) return false;
-    return true;
-  });
+  const filtered = needsReviewOnly
+    ? videos.filter(v => v.status === VIDEO_STATUS_REVIEW && (v.approvalStatus === APPROVAL_PENDING || v.approvalStatus === APPROVAL_REVISE))
+    : videos.filter(v => {
+        if (videoFilter === 'awaiting_planner') return v.status === VIDEO_STATUS_DONE && v.plannerStatus === PLAN_NOT_POSTED;
+        return videoFilter === 'all' || v.status === statusMap[videoFilter];
+      });
 
   if (filtered.length === 0) {
     tbody.innerHTML = '';
