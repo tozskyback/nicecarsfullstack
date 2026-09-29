@@ -2003,6 +2003,11 @@ function renderCarPostSummary() {
   `;
 }
 
+function videoNeedsReview(v) {
+  return (v.status === VIDEO_STATUS_REVIEW && v.approvalStatus === APPROVAL_PENDING) ||
+         (v.status === VIDEO_STATUS_EDITING && v.approvalStatus === APPROVAL_REVISE);
+}
+
 function renderVideoList() {
   const filterBar = document.getElementById('videoFilterBar');
   const tbody = document.getElementById('videoTableBody');
@@ -2026,7 +2031,7 @@ function renderVideoList() {
     ['done', 'เสร็จแล้ว'],
     ['awaiting_planner', 'รอลง Planner'],
   ];
-  const needsReviewCount = videos.filter(v => v.approvalStatus === APPROVAL_PENDING || v.approvalStatus === APPROVAL_REVISE).length;
+  const needsReviewCount = videos.filter(videoNeedsReview).length;
   const needsReviewToggle = isAdmin() ? `
     <label class="filter-toggle">
       <input type="checkbox" id="videoNeedsReviewOnly" onchange="renderVideoList()">
@@ -2043,7 +2048,7 @@ function renderVideoList() {
   const statusMap = { editing: VIDEO_STATUS_EDITING, review: VIDEO_STATUS_REVIEW, done: VIDEO_STATUS_DONE };
   const needsReviewOnly = isAdmin() && needsReviewOnlyEl && needsReviewOnlyEl.checked;
   const filtered = needsReviewOnly
-    ? videos.filter(v => v.status === VIDEO_STATUS_REVIEW && (v.approvalStatus === APPROVAL_PENDING || v.approvalStatus === APPROVAL_REVISE))
+    ? videos.filter(videoNeedsReview)
     : videos.filter(v => {
         if (videoFilter === 'awaiting_planner') return v.status === VIDEO_STATUS_DONE && v.plannerStatus === PLAN_NOT_POSTED;
         return videoFilter === 'all' || v.status === statusMap[videoFilter];
