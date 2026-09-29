@@ -1965,7 +1965,7 @@ function askDeleteVideo(id) {
 }
 
 function setVideoFilter(key) {
-  videoFilter = key;
+  videoFilter = (videoFilter === key) ? 'all' : key;
   renderVideoList();
 }
 
@@ -2003,25 +2003,56 @@ function renderCarPostSummary() {
   `;
 }
 
+function videoNeedsReview(v) {
+  return (v.status === VIDEO_STATUS_REVIEW && v.approvalStatus === APPROVAL_PENDING) ||
+         (v.status === VIDEO_STATUS_EDITING && v.approvalStatus === APPROVAL_REVISE);
+}
+
 function renderVideoList() {
   const filterBar = document.getElementById('videoFilterBar');
   const tbody = document.getElementById('videoTableBody');
   const empty = document.getElementById('videoEmptyState');
   if (!filterBar || !tbody) return;
 
+  const prevReviewEl = document.getElementById('videoNeedsReviewOnly');
+  const prevNeedsReviewChecked = prevReviewEl ? prevReviewEl.checked : false;
+
   const counts = {
     all: videos.length,
     editing: videos.filter(v => v.status === VIDEO_STATUS_EDITING).length,
     review: videos.filter(v => v.status === VIDEO_STATUS_REVIEW).length,
     done: videos.filter(v => v.status === VIDEO_STATUS_DONE).length,
+    awaiting_planner: videos.filter(v => v.status === VIDEO_STATUS_DONE && v.plannerStatus === PLAN_NOT_POSTED).length,
   };
-  const chips = [['all', 'ทั้งหมด'], ['editing', 'กำลังตัดต่อ'], ['review', 'รอตรวจ'], ['done', 'เสร็จแล้ว']];
+  const chips = [
+    ['all', 'ทั้งหมด'],
+    ['editing', 'กำลังตัดต่อ'],
+    ['review', 'รอตรวจ'],
+    ['done', 'เสร็จแล้ว'],
+    ['awaiting_planner', 'รอลง Planner'],
+  ];
+  const needsReviewCount = videos.filter(videoNeedsReview).length;
+  const needsReviewToggle = isAdmin() ? `
+    <label class="filter-toggle">
+      <input type="checkbox" id="videoNeedsReviewOnly" onchange="renderVideoList()">
+      <span>รอตรวจ/แก้ (${needsReviewCount})</span>
+    </label>
+  ` : '';
   filterBar.innerHTML = chips.map(([key, label]) => `
     <button class="car-filter-chip ${videoFilter === key ? 'active' : ''}" onclick="setVideoFilter('${key}')">${label} (${counts[key]})</button>
-  `).join('');
+  `).join('') + needsReviewToggle;
+
+  const needsReviewOnlyEl = document.getElementById('videoNeedsReviewOnly');
+  if (needsReviewOnlyEl) needsReviewOnlyEl.checked = prevNeedsReviewChecked;
 
   const statusMap = { editing: VIDEO_STATUS_EDITING, review: VIDEO_STATUS_REVIEW, done: VIDEO_STATUS_DONE };
-  const filtered = videos.filter(v => videoFilter === 'all' || v.status === statusMap[videoFilter]);
+  const needsReviewOnly = isAdmin() && needsReviewOnlyEl && needsReviewOnlyEl.checked;
+  const filtered = needsReviewOnly
+    ? videos.filter(videoNeedsReview)
+    : videos.filter(v => {
+        if (videoFilter === 'awaiting_planner') return v.status === VIDEO_STATUS_DONE && v.plannerStatus === PLAN_NOT_POSTED;
+        return videoFilter === 'all' || v.status === statusMap[videoFilter];
+      });
 
   if (filtered.length === 0) {
     tbody.innerHTML = '';
