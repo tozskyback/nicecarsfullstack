@@ -605,6 +605,10 @@
           <div class="summary-heading">รถที่เคยเลือกโพสล่าสุด (เฉพาะรถที่ยังไม่ขาย)</div>
           <div id="carPostSummary"></div>
         </div>
+        <div class="summary-block" style="margin-top:20px;">
+          <div class="summary-heading">รอลง Planner</div>
+          <div id="awaitingPlannerSummary"></div>
+        </div>
         <div class="car-filter-bar" id="videoFilterBar"></div>
         <div class="table-wrap" style="margin-top:16px;">
           <table>
@@ -1178,6 +1182,7 @@ async function reloadVideos() {
     renderVideoList();
     populatePostPlanSelects();
     renderPostPlanCalendar();
+    renderAwaitingPlannerSummary();
   } catch (e) { showToast('โหลดข้อมูลวิดีโอไม่สำเร็จ: ' + e.message, true); }
 }
 async function reloadWeeklyPosts() {
@@ -1974,6 +1979,29 @@ function videoPostDate(videoId) {
   return post ? post.postDate : null;
 }
 
+function renderAwaitingPlannerSummary() {
+  const wrap = document.getElementById('awaitingPlannerSummary');
+  if (!wrap) return;
+  const rows = videos
+    .filter(v => v.status === VIDEO_STATUS_DONE && v.plannerStatus === PLAN_NOT_POSTED)
+    .sort((a, b) => (a.completedAt || 0) - (b.completedAt || 0));
+
+  if (rows.length === 0) {
+    wrap.innerHTML = '<div class="muted" style="padding:4px 2px;">ไม่มีวิดีโอที่เสร็จแล้วแต่ยังไม่ได้ลง Planner</div>';
+    return;
+  }
+  wrap.innerHTML = `
+    <div class="car-list">
+      ${rows.map(v => `
+        <div class="car-row">
+          <div><span class="code-badge">${escapeHtml(v.code)}</span> ${escapeHtml(v.title)}</div>
+          <div class="muted">เสร็จเมื่อ ${fmtDate(v.completedAt)}</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
 function renderCarPostSummary() {
   const wrap = document.getElementById('carPostSummary');
   if (!wrap) return;
@@ -2014,27 +2042,26 @@ function renderVideoList() {
     editing: videos.filter(v => v.status === VIDEO_STATUS_EDITING).length,
     review: videos.filter(v => v.status === VIDEO_STATUS_REVIEW).length,
     done: videos.filter(v => v.status === VIDEO_STATUS_DONE).length,
-    awaiting_planner: videos.filter(v => v.status === VIDEO_STATUS_DONE && v.plannerStatus === PLAN_NOT_POSTED).length,
-    needs_review: videos.filter(v => v.approvalStatus === APPROVAL_PENDING || v.approvalStatus === APPROVAL_REVISE).length,
   };
-  const chips = [
-    ['all', 'ทั้งหมด'],
-    ['editing', 'กำลังตัดต่อ'],
-    ['review', 'รอตรวจ'],
-    ['done', 'เสร็จแล้ว'],
-    ['awaiting_planner', 'เฉพาะวิดีโอรอลง Planner'],
-    ['needs_review', 'เฉพาะรอตรวจ/แก้'],
-  ];
+  const chips = [['all', 'ทั้งหมด'], ['editing', 'กำลังตัดต่อ'], ['review', 'รอตรวจ'], ['done', 'เสร็จแล้ว']];
+  const needsReviewCount = videos.filter(v => v.approvalStatus === APPROVAL_PENDING || v.approvalStatus === APPROVAL_REVISE).length;
+  const needsReviewToggle = isAdmin() ? `
+    <label class="filter-toggle">
+      <input type="checkbox" id="videoNeedsReviewOnly" onchange="renderVideoList()">
+      <span>เฉพาะรอตรวจ/แก้ (${needsReviewCount})</span>
+    </label>
+  ` : '';
   filterBar.innerHTML = chips.map(([key, label]) => `
     <button class="car-filter-chip ${videoFilter === key ? 'active' : ''}" onclick="setVideoFilter('${key}')">${label} (${counts[key]})</button>
-  `).join('');
+  `).join('') + needsReviewToggle;
 
   const statusMap = { editing: VIDEO_STATUS_EDITING, review: VIDEO_STATUS_REVIEW, done: VIDEO_STATUS_DONE };
+  const needsReviewOnlyEl = document.getElementById('videoNeedsReviewOnly');
+  const needsReviewOnly = isAdmin() && needsReviewOnlyEl && needsReviewOnlyEl.checked;
   const filtered = videos.filter(v => {
-    if (videoFilter === 'all') return true;
-    if (videoFilter === 'awaiting_planner') return v.status === VIDEO_STATUS_DONE && v.plannerStatus === PLAN_NOT_POSTED;
-    if (videoFilter === 'needs_review') return v.approvalStatus === APPROVAL_PENDING || v.approvalStatus === APPROVAL_REVISE;
-    return v.status === statusMap[videoFilter];
+    if (videoFilter !== 'all' && v.status !== statusMap[videoFilter]) return false;
+    if (needsReviewOnly && !(v.approvalStatus === APPROVAL_PENDING || v.approvalStatus === APPROVAL_REVISE)) return false;
+    return true;
   });
 
   if (filtered.length === 0) {
