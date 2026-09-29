@@ -2014,14 +2014,28 @@ function renderVideoList() {
     editing: videos.filter(v => v.status === VIDEO_STATUS_EDITING).length,
     review: videos.filter(v => v.status === VIDEO_STATUS_REVIEW).length,
     done: videos.filter(v => v.status === VIDEO_STATUS_DONE).length,
+    awaiting_planner: videos.filter(v => v.status === VIDEO_STATUS_DONE && v.plannerStatus === PLAN_NOT_POSTED).length,
+    needs_review: videos.filter(v => v.approvalStatus === APPROVAL_PENDING || v.approvalStatus === APPROVAL_REVISE).length,
   };
-  const chips = [['all', 'ทั้งหมด'], ['editing', 'กำลังตัดต่อ'], ['review', 'รอตรวจ'], ['done', 'เสร็จแล้ว']];
+  const chips = [
+    ['all', 'ทั้งหมด'],
+    ['editing', 'กำลังตัดต่อ'],
+    ['review', 'รอตรวจ'],
+    ['done', 'เสร็จแล้ว'],
+    ['awaiting_planner', 'เฉพาะวิดีโอรอลง Planner'],
+    ['needs_review', 'เฉพาะรอตรวจ/แก้'],
+  ];
   filterBar.innerHTML = chips.map(([key, label]) => `
     <button class="car-filter-chip ${videoFilter === key ? 'active' : ''}" onclick="setVideoFilter('${key}')">${label} (${counts[key]})</button>
   `).join('');
 
   const statusMap = { editing: VIDEO_STATUS_EDITING, review: VIDEO_STATUS_REVIEW, done: VIDEO_STATUS_DONE };
-  const filtered = videos.filter(v => videoFilter === 'all' || v.status === statusMap[videoFilter]);
+  const filtered = videos.filter(v => {
+    if (videoFilter === 'all') return true;
+    if (videoFilter === 'awaiting_planner') return v.status === VIDEO_STATUS_DONE && v.plannerStatus === PLAN_NOT_POSTED;
+    if (videoFilter === 'needs_review') return v.approvalStatus === APPROVAL_PENDING || v.approvalStatus === APPROVAL_REVISE;
+    return v.status === statusMap[videoFilter];
+  });
 
   if (filtered.length === 0) {
     tbody.innerHTML = '';
