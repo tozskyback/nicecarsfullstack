@@ -2124,7 +2124,7 @@ function renderVideoList() {
     const plannerColor = v.plannerStatus === PLAN_POSTED ? '#157F3C' : '#6B7280';
     const approvalColor = APPROVAL_COLORS[v.approvalStatus] || '#6B7280';
     const approvalCell = isAdmin()
-      ? `<select onchange="setVideoApproval('${v.id}', this.value)">${APPROVAL_STATES.map(s => `<option value="${s}" ${s === v.approvalStatus ? 'selected' : ''}>${s}</option>`).join('')}</select>`
+      ? `<select onchange="setVideoApproval('${v.id}', this.value)" ${v.approvalStatus === APPROVAL_REVISE ? `onfocus="this.dataset.prev=this.value; this.selectedIndex=-1;" onblur="if(this.selectedIndex===-1) this.value=this.dataset.prev;"` : ''}>${APPROVAL_STATES.map(s => `<option value="${s}" ${s === v.approvalStatus ? 'selected' : ''}>${s}</option>`).join('')}</select>`
       : `<span class="badge" style="background:${approvalColor}18; color:${approvalColor};"><span class="dot"></span>${escapeHtml(v.approvalStatus)}</span>`;
     return `
       <tr>
