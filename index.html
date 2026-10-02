@@ -2058,6 +2058,7 @@ function renderCarPostSummary() {
 
 function videoNeedsReview(v) {
   return (v.status === VIDEO_STATUS_REVIEW && v.approvalStatus === APPROVAL_PENDING) ||
+         (v.status === VIDEO_STATUS_REVIEW && v.approvalStatus === APPROVAL_REVISE) ||
          (v.status === VIDEO_STATUS_EDITING && v.approvalStatus === APPROVAL_REVISE);
 }
 
