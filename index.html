@@ -352,6 +352,8 @@
   .nav-mv { padding: 1px 7px; border-radius: 4px; background: rgba(255,255,255,0.14); font-size: 11px; line-height: 1.5; }
   .nav-mv:hover { background: var(--amber); color: #1B2A38; }
   @media (max-width: 820px) { .nav-sort-btn { width: auto; margin: 0 4px; white-space: nowrap; flex-shrink: 0; } }
+  .r1-row3 { grid-template-columns: 1fr 1fr 1fr; }
+  @media (max-width: 820px) { .r1-row3 { grid-template-columns: 1fr; } }
 
   .hidden { display: none !important; }
 
@@ -700,12 +702,22 @@
         <div class="topbar-row">
           <div>
             <h2>สต็อกรถ</h2>
-            <p class="sub">รถทั้งหมดในร้าน รหัสกุญแจ ราคาขาย สถานะ และเช็กลิสต์การลงขาย</p>
+            <p class="sub" id="stockSub">—</p>
           </div>
           <button class="btn btn-amber hidden" id="stockAddBtn" onclick="openCarDrawer(null)">+ รถเข้าใหม่</button>
         </div>
       </div>
       <div class="content">
+        <div class="month-bar">
+          <button class="icon-btn" id="stockMonthPrev" title="เดือนก่อนหน้า" onclick="r1ChangeStockMonth(-1)">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <div class="month-label" id="stockMonthLabel">—</div>
+          <button class="icon-btn" id="stockMonthNext" title="เดือนถัดไป" onclick="r1ChangeStockMonth(1)">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <button class="btn btn-ghost btn-sm hidden" id="stockBackBtn" onclick="r1StockMonthNow()">กลับเดือนปัจจุบัน</button>
+        </div>
         <div class="stats" id="stockStats"></div>
         <div class="filterbar">
           <div class="search-box">
@@ -713,8 +725,7 @@
             <input type="text" id="stockSearch" placeholder="ค้นหารหัสรถ, ยี่ห้อ, รุ่น, ทะเบียน, เลขตัวถัง…" oninput="renderStock()">
           </div>
           <select class="filter-select" id="stockStatusFilter" onchange="renderStock()">
-            <option value="instock">รถในสต็อก (ไม่รวมขายแล้ว)</option>
-            <option value="all">ทั้งหมด</option>
+            <option value="all">สถานะทั้งหมด</option>
             <option value="ว่าง">ว่าง</option>
             <option value="จอง">จอง</option>
             <option value="ขาย">ขายแล้ว</option>
@@ -2795,7 +2806,7 @@ function showToast(msg, isErr) {
 /* =================================================================
    รอบ 1 — รถเข้า / สต็อกรถ / งานทะเบียน
    ================================================================= */
-const R1_SALES_COLS = 'code,brand,model_name,sub_model,year_made,year_reg,mileage,color,engine_cc,horsepower,fuel,plate,plate_province,vin,engine_no,owner_seq,warranty_expiry,warranty_battery_expiry,key_slot,sale_price,stock_status,list_one2car,list_taladrod,list_line,list_photos,list_inspect';
+const R1_SALES_COLS = 'code,brand,model_name,sub_model,year_made,year_reg,mileage,color,engine_cc,horsepower,fuel,plate,plate_province,vin,engine_no,owner_seq,warranty_expiry,warranty_battery_expiry,sold_date,updated_at,key_slot,sale_price,stock_status,list_one2car,list_taladrod,list_line,list_photos,list_inspect';
 const R1_KEY_SLOTS = 25;
 const R1_WARN_DAYS = 30;
 const R1_DOC_KEYS = [
@@ -2918,6 +2929,26 @@ function r1Title(code) {
   const c = r1Car(code);
   return c ? c.model : '';
 }
+/* ---------- สต็อกรายเดือน: รถที่ยังไม่ขายอยู่เดือนปัจจุบันเสมอ รถที่ขายแล้วอยู่ในเดือนที่ขาย ---------- */
+let r1StockMonthKey = null;
+function r1CurStockMonth() { if (!r1StockMonthKey) r1StockMonthKey = currentMonthKey(); return r1StockMonthKey; }
+function r1SoldMonthKey(code) {
+  const d = carDetails[code], c = r1Car(code);
+  if (d && d.sold_date) return String(d.sold_date).slice(0, 7);
+  if (c && c.soldCaseId) {
+    const cs = cases.find(x => x.id === c.soldCaseId);
+    if (cs && cs.closedAt) return monthKeyOf(cs.closedAt);
+  }
+  if (d && d.updated_at) return monthKeyOf(Number(d.updated_at));
+  return null;
+}
+function r1ChangeStockMonth(delta) {
+  const next = shiftMonthKey(r1CurStockMonth(), delta);
+  if (next > currentMonthKey()) return;
+  r1StockMonthKey = next;
+  renderStock();
+}
+function r1StockMonthNow() { r1StockMonthKey = currentMonthKey(); renderStock(); }
 function r1UsedSlots(excludeCode) {
   const used = {};
   Object.keys(carDetails).forEach(code => {
@@ -3121,16 +3152,30 @@ function renderStock() {
   const search = document.getElementById('stockSearch').value.trim().toLowerCase();
   const statusF = document.getElementById('stockStatusFilter').value;
 
-  const all = cars.map(c => ({ code: c.code, d: carDetails[c.code] || null, st: r1Status(c.code) }));
+  const curKey = currentMonthKey();
+  const month = r1CurStockMonth();
+  const isCurrent = month === curKey;
+  const all = cars.map(c => {
+    const st = r1Status(c.code);
+    return { code: c.code, d: carDetails[c.code] || null, st, mk: st === 'ขาย' ? r1SoldMonthKey(c.code) : curKey };
+  }).filter(r => r.mk === month);
   const cnt = { ว่าง: 0, จอง: 0, ขาย: 0 };
   all.forEach(r => { cnt[r.st]++; });
   const slotsUsed = Object.keys(r1UsedSlots(null)).length;
-  document.getElementById('stockStats').innerHTML = `
+  document.getElementById('stockMonthLabel').textContent = monthKeyLabel(month);
+  document.getElementById('stockMonthNext').disabled = isCurrent;
+  document.getElementById('stockBackBtn').classList.toggle('hidden', isCurrent);
+  document.getElementById('stockSub').textContent = isCurrent
+    ? 'รถที่ยังไม่ขายรวมอยู่ในเดือนปัจจุบันเสมอ ส่วนรถที่ขายแล้วจะแสดงในเดือนที่ขาย'
+    : 'กำลังดูข้อมูลย้อนหลัง — แสดงเฉพาะรถที่ขายในเดือนนี้';
+  document.getElementById('stockStats').innerHTML = isCurrent ? `
     <div class="stat-card"><div class="num">${cnt['ว่าง'] + cnt['จอง']}</div><div class="lbl">รถในสต็อก</div></div>
     <div class="stat-card success"><div class="num">${cnt['ว่าง']}</div><div class="lbl">ว่าง</div></div>
     <div class="stat-card amber"><div class="num">${cnt['จอง']}</div><div class="lbl">จอง</div></div>
-    <div class="stat-card"><div class="num" style="color:${R1_STATUS_COLOR['ขาย']}">${cnt['ขาย']}</div><div class="lbl">ขายแล้ว</div></div>
+    <div class="stat-card"><div class="num" style="color:${R1_STATUS_COLOR['ขาย']}">${cnt['ขาย']}</div><div class="lbl">ขายแล้วเดือนนี้</div></div>
     <div class="stat-card"><div class="num">${slotsUsed}/${R1_KEY_SLOTS}</div><div class="lbl">กุญแจที่ใช้</div></div>
+  ` : `
+    <div class="stat-card"><div class="num" style="color:${R1_STATUS_COLOR['ขาย']}">${cnt['ขาย']}</div><div class="lbl">ขายแล้วในเดือนนี้</div></div>
   `;
 
   let rows = all.filter(r => {
@@ -3207,9 +3252,9 @@ const R1_SECTIONS = [
     { k: 'tax_expiry', label: 'ภาษี หมดอายุ', type: 'dmy', hint: 'พิมพ์ตัวเลขอย่างเดียว วัน/เดือน/ปี เช่น 31122027 (ระบบใส่ / ให้) · เตือนก่อนหมด 30 วัน เฉพาะภาษี' },
     { k: 'act_expiry', label: 'พรบ. หมดอายุ', type: 'dmy', half: true },
     { k: 'act_company', label: 'พรบ. ของบริษัท', half: true, hint: 'ไม่ระบุ = ไม่มี พรบ.' },
-    { k: 'insurance_class', label: 'ประกันชั้น', half: true, list: 'r1InsClassList', hint: 'ไม่ระบุ = ไม่มีประกัน' },
-    { k: 'insurance_company', label: 'ประกันของบริษัท', half: true },
-    { k: 'insurance_expiry', label: 'ประกัน หมดอายุ', type: 'dmy' },
+    { k: 'insurance_expiry', label: 'ประกันหมดอายุ', type: 'dmy', third: true },
+    { k: 'insurance_class', label: 'ประกันชั้น', third: true, list: 'r1InsClassList' },
+    { k: 'insurance_company', label: 'ประกันของบริษัท', third: true, hint: 'ไม่ระบุประกัน = ไม่มีประกัน' },
     { k: 'warranty_expiry', label: 'Warranty ตัวรถ หมดอายุ', type: 'dmy', half: true, hint: 'พิมพ์ตัวเลข วัน/เดือน/ปี เช่น 31122027' },
     { k: 'warranty_battery_expiry', label: 'Warranty แบตเตอรี่ (ถ้ามี)', type: 'dmy', half: true },
     { k: 'spare_key_note', label: 'กุญแจสำรอง (พิมพ์อธิบาย)', type: 'textarea' },
@@ -3243,6 +3288,7 @@ const R1_SECTIONS = [
     { k: 'key_slot', label: 'รหัสกุญแจ (1-25)', type: 'slot', half: true },
     { k: 'sale_price', label: 'ราคาขาย (บาท)', type: 'money', half: true },
     { k: 'stock_status', label: 'สถานะ', type: 'select', options: ['ว่าง', 'จอง', 'ขาย'], def: 'ว่าง' },
+    { k: 'sold_date', label: 'วันที่ขาย (ถ้าขายแล้ว)', type: 'dmy', hint: 'เว้นว่างได้ ระบบใช้วันที่ตั้งสถานะเป็น "ขาย" · ใช้จัดรถเข้าเดือนที่ขายในหน้าสต็อก' },
     { k: '_listings', label: 'เช็กลิสต์การลงขาย', type: 'checks' },
   ]},
 ];
@@ -3300,12 +3346,17 @@ function r1RenderForm(code) {
   R1_SECTIONS.forEach(sec => {
     if (sec.access === 'staff' && !staff) return;
     let inner = '';
-    let buf = [];
+    let buf = [], buf3 = [];
     const flush = () => { if (buf.length) { inner += `<div class="field-row">${buf.join('')}</div>`; buf = []; } };
     sec.fields.forEach(f => {
       if (f.priv && !isAdmin()) return;
       const h = r1FieldHtml(f, v, ro, code);
-      if (f.half) { buf.push(h); if (buf.length === 2) flush(); }
+      if (f.third) {
+        flush();
+        buf3.push(h);
+        if (buf3.length === 3) { inner += `<div class="field-row r1-row3">${buf3.join('')}</div>`; buf3 = []; }
+      }
+      else if (f.half) { buf.push(h); if (buf.length === 2) flush(); }
       else { flush(); inner += h; }
     });
     flush();
@@ -3384,6 +3435,10 @@ async function saveCarDrawer() {
   }
   if (d.book_status === 'ปิดไฟแนนซ์' && Number(d.deposit_amount) > 0 && !d.deposit_status) d.deposit_status = 'รอคืน';
   if (d.deposit_status === 'ได้คืนแล้ว' && !d.deposit_returned_date) d.deposit_returned_date = r1TodayStr();
+  if (d.stock_status === 'ขาย') {
+    const cc = r1Car(code);
+    if (!d.sold_date && !(cc && cc.sold)) d.sold_date = r1TodayStr();   // รถที่ขายผ่านเคสอยู่แล้ว ใช้เดือนปิดเคสเดิม
+  } else d.sold_date = null;
 
   const persist = () => r1Persist(code, form);
   if (d.vin) {
@@ -3402,7 +3457,7 @@ async function r1Persist(code, form) {
   const btn = document.getElementById('saveCarBtn');
   btn.disabled = true;
   try {
-    const composed = [d.brand, d.model_name, d.sub_model, d.year_reg || d.year_made].filter(Boolean).join(' ');
+    const composed = [d.brand, d.model_name, d.sub_model, d.year_reg || d.year_made, d.plate].filter(Boolean).join(' ');   // ตามด้วยเลขทะเบียน
     const car = r1Car(code);
     if (!r1EditingCode && car && car.sold && d.stock_status !== 'ขาย') d.stock_status = 'ขาย';   // รหัสนี้ขายไปแล้ว ไม่ให้ลงข้อมูลย้อนแล้วกลายเป็นว่าง
     const newSold = d.stock_status === 'ขาย';
