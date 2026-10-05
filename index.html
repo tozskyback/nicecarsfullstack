@@ -346,6 +346,12 @@
   .note-add { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 14px; }
   .note-add .field { margin-bottom: 0; flex: 1; min-width: 160px; }
   .stock-status-sel { font-family: inherit; }
+  .nav-sort-btn { display: block; width: 100%; margin-top: 12px; padding: 7px 12px; background: transparent; border: 1px dashed rgba(255,255,255,0.28); color: #9FB3C2; border-radius: 7px; font-family: var(--font-th); font-size: 12.5px; cursor: pointer; }
+  .nav-sort-btn:hover { color: #fff; border-color: rgba(255,255,255,0.5); }
+  .nav-mv-wrap { margin-left: auto; display: inline-flex; gap: 4px; }
+  .nav-mv { padding: 1px 7px; border-radius: 4px; background: rgba(255,255,255,0.14); font-size: 11px; line-height: 1.5; }
+  .nav-mv:hover { background: var(--amber); color: #1B2A38; }
+  @media (max-width: 820px) { .nav-sort-btn { width: auto; margin: 0 4px; white-space: nowrap; flex-shrink: 0; } }
 
   .hidden { display: none !important; }
 
@@ -414,6 +420,7 @@
       <button class="nav-item hidden" id="usersNavItem" data-tab="users" onclick="switchTab('users')"><span class="dot"></span>จัดการผู้ใช้งาน</button>
       <button class="nav-item hidden" id="videosNavItem" data-tab="videos" onclick="switchTab('videos')"><span class="dot"></span>จัดการวิดีโอ</button>
       <button class="nav-item hidden" id="postplanNavItem" data-tab="postplan" onclick="switchTab('postplan')"><span class="dot"></span>แผนโพสรายสัปดาห์</button>
+      <button class="nav-sort-btn" id="navSortBtn" onclick="r1ToggleNavSort()">↕ จัดลำดับเมนู</button>
     </nav>
     <div class="who-pill">
       <span class="name" id="whoName">—</span>
@@ -719,14 +726,13 @@
               <tr>
                 <th>กุญแจ</th>
                 <th>รหัสรถ</th>
-                <th>รถ</th>
                 <th>ทะเบียน</th>
+                <th>รถ</th>
                 <th>ไมล์</th>
-                <th>ราคาขาย</th>
-                <th>สถานะ</th>
-                <th>ลงขาย</th>
+                <th>เชื้อเพลิง</th>
                 <th>ลำดับเจ้าของ</th>
                 <th>Warranty หมดอายุ</th>
+                <th>สถานะ</th>
               </tr>
             </thead>
             <tbody id="stockBody"></tbody>
@@ -1045,7 +1051,7 @@
       <button class="drawer-close" onclick="closeTaxModal()"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
     </div>
     <div class="drawer-body">
-      <div class="field"><label>ภาษี หมดอายุวันที่</label><input type="date" id="r1TaxDate"></div>
+      <div class="field"><label>ภาษี หมดอายุวันที่</label><input type="text" id="r1TaxDate" inputmode="numeric" autocomplete="off" maxlength="10" placeholder="พิมพ์ตัวเลข เช่น 31122027" oninput="r1DateInput(this)"><div class="hint">พิมพ์ตัวเลขอย่างเดียว วัน/เดือน/ปี ระบบใส่ / ให้</div></div>
       <div style="display:flex; gap:10px; margin-top:8px;">
         <button class="btn btn-primary" onclick="saveTaxModal()">บันทึก</button>
         <button class="btn btn-ghost" onclick="closeTaxModal()">ยกเลิก</button>
@@ -2849,6 +2855,12 @@ function r1MoneyShown(v) {
   const n = Number(String(v).replace(/,/g, ''));
   return isNaN(n) ? String(v) : n.toLocaleString('en-US', { maximumFractionDigits: 2 });
 }
+/* พิมพ์ตัวเลขอย่างเดียว เช่น 31122027 ระบบใส่ / ให้เป็น 31/12/2027 */
+function r1DateInput(el) {
+  const dg = el.value.replace(/\D/g, '').slice(0, 8);
+  el.value = dg.length > 4 ? dg.slice(0, 2) + '/' + dg.slice(2, 4) + '/' + dg.slice(4)
+    : dg.length > 2 ? dg.slice(0, 2) + '/' + dg.slice(2) : dg;
+}
 /* วันที่แบบพิมพ์ วว/ดด/ปปปป (รับ พ.ศ. ด้วย) <-> ISO */
 function r1FmtDmy(iso) {
   if (!iso) return '—';
@@ -2856,8 +2868,9 @@ function r1FmtDmy(iso) {
   return p.length < 3 ? '—' : p[2] + '/' + p[1] + '/' + p[0];
 }
 function r1ParseDmy(str) {
-  const t = (str || '').trim();
+  let t = (str || '').trim();
   if (!t) return { ok: true, iso: null };
+  if (/^\d{8}$/.test(t)) t = t.slice(0, 2) + '/' + t.slice(2, 4) + '/' + t.slice(4);
   const m = t.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
   if (!m) return { ok: false };
   const dd = +m[1], mm = +m[2];
@@ -3020,10 +3033,57 @@ function setupRound1Nav() {
     document.getElementById('stockAddBtn').classList.remove('hidden');
   }
   if (isRegistry()) document.getElementById('casesNavItem').classList.add('hidden');
-  if (isAdmin()) {
-    const host = document.querySelector('#tab-cases .content');
-    if (host && !document.getElementById('r1AlertStrip')) host.insertAdjacentHTML('afterbegin', '<div class="alert-strip hidden" id="r1AlertStrip"></div>');
-  }
+  r1ApplyNavOrder();
+}
+
+/* ---------- จัดลำดับเมนูซ้ายเอง (จำค่าแยกตามผู้ใช้ ในเบราว์เซอร์/เครื่องนี้) ---------- */
+let r1NavSorting = false;
+function r1NavKey() { return 'nicecars_nav_order_' + (session ? session.username : ''); }
+function r1NavEl() { return document.querySelector('.sidebar-nav'); }
+function r1ApplyNavOrder() {
+  const nav = r1NavEl(), btn = document.getElementById('navSortBtn');
+  if (!nav || !btn) return;
+  r1NavSorting = false;
+  nav.querySelectorAll('.nav-mv-wrap').forEach(n => n.remove());
+  btn.textContent = '↕ จัดลำดับเมนู';
+  let saved = [];
+  try { saved = JSON.parse(localStorage.getItem(r1NavKey()) || '[]'); } catch (e) { saved = []; }
+  const items = Array.from(nav.querySelectorAll('.nav-item'));
+  const byId = {};
+  items.forEach(el => { byId[el.id] = el; });
+  const ordered = saved.filter(id => byId[id]).map(id => byId[id]);
+  items.forEach(el => { if (!ordered.includes(el)) ordered.push(el); });
+  ordered.forEach(el => nav.insertBefore(el, btn));
+}
+function r1ToggleNavSort() {
+  const nav = r1NavEl();
+  if (!nav) return;
+  r1NavSorting = !r1NavSorting;
+  nav.querySelectorAll('.nav-mv-wrap').forEach(n => n.remove());
+  document.getElementById('navSortBtn').textContent = r1NavSorting ? '✓ เสร็จสิ้น' : '↕ จัดลำดับเมนู';
+  if (!r1NavSorting) return;
+  nav.querySelectorAll('.nav-item').forEach(el => {
+    if (el.classList.contains('hidden')) return;
+    const wrap = document.createElement('span');
+    wrap.className = 'nav-mv-wrap';
+    [['▲', -1, 'เลื่อนขึ้น'], ['▼', 1, 'เลื่อนลง']].forEach(([ch, dir, title]) => {
+      const sp = document.createElement('span');
+      sp.className = 'nav-mv';
+      sp.textContent = ch;
+      sp.title = title;
+      sp.addEventListener('click', ev => { ev.stopPropagation(); ev.preventDefault(); r1MoveNav(el, dir); });
+      wrap.appendChild(sp);
+    });
+    el.appendChild(wrap);
+  });
+}
+function r1MoveNav(el, dir) {
+  const nav = r1NavEl();
+  const vis = Array.from(nav.querySelectorAll('.nav-item')).filter(x => !x.classList.contains('hidden'));
+  const i = vis.indexOf(el), j = i + dir;
+  if (i < 0 || j < 0 || j >= vis.length) return;
+  if (dir < 0) nav.insertBefore(el, vis[j]); else nav.insertBefore(el, vis[j].nextSibling);
+  try { localStorage.setItem(r1NavKey(), JSON.stringify(Array.from(nav.querySelectorAll('.nav-item')).map(x => x.id))); } catch (e) {}
 }
 
 function r1RenderAll() {
@@ -3107,14 +3167,13 @@ function renderStock() {
       <tr data-code="${escapeHtml(r.code)}" onclick="openCarDrawer(this.dataset.code)">
         <td>${d && d.key_slot ? `<span class="code-badge">${d.key_slot}</span>` : '<span class="muted">—</span>'}</td>
         <td><span class="code-badge">${escapeHtml(r.code)}</span></td>
-        <td>${carCell}</td>
         <td class="muted">${d ? escapeHtml([d.plate, d.plate_province].filter(Boolean).join(' ') || '—') : '—'}</td>
+        <td>${carCell}</td>
         <td class="muted">${d ? fmtMoney(d.mileage) : '—'}</td>
-        <td>${d ? fmtMoney(d.sale_price) : '—'}</td>
-        <td><span class="badge" style="background:${col}18; color:${col};"><span class="dot"></span>${r.st}</span></td>
-        <td class="muted" title="${R1_LISTINGS.map(([k, l]) => (d && d[k] ? '✓ ' : '✗ ') + l).join('  ')}">${d ? listed + '/' + R1_LISTINGS.length : '—'}</td>
+        <td class="muted">${d && d.fuel ? escapeHtml(d.fuel) : '—'}</td>
         ${ownerCell}
         ${warrantyCell}
+        <td><span class="badge" style="background:${col}18; color:${col};"><span class="dot"></span>${r.st}</span></td>
       </tr>
     `;
   }).join('');
@@ -3145,13 +3204,13 @@ const R1_SECTIONS = [
     { k: 'prev_owner_phone', label: 'เบอร์ติดต่อเจ้าของเก่า' },
   ]},
   { id: 'tax', title: 'ภาษี / พรบ. / ประกัน / Warranty / กุญแจสำรอง', access: 'staff', fields: [
-    { k: 'tax_expiry', label: 'ภาษี หมดอายุ', type: 'date', hint: 'ระบบเตือนก่อนหมด 30 วัน (เตือนเฉพาะภาษี)' },
-    { k: 'act_expiry', label: 'พรบ. หมดอายุ', type: 'date', half: true },
+    { k: 'tax_expiry', label: 'ภาษี หมดอายุ', type: 'dmy', hint: 'พิมพ์ตัวเลขอย่างเดียว วัน/เดือน/ปี เช่น 31122027 (ระบบใส่ / ให้) · เตือนก่อนหมด 30 วัน เฉพาะภาษี' },
+    { k: 'act_expiry', label: 'พรบ. หมดอายุ', type: 'dmy', half: true },
     { k: 'act_company', label: 'พรบ. ของบริษัท', half: true, hint: 'ไม่ระบุ = ไม่มี พรบ.' },
     { k: 'insurance_class', label: 'ประกันชั้น', half: true, list: 'r1InsClassList', hint: 'ไม่ระบุ = ไม่มีประกัน' },
     { k: 'insurance_company', label: 'ประกันของบริษัท', half: true },
-    { k: 'insurance_expiry', label: 'ประกัน หมดอายุ', type: 'date' },
-    { k: 'warranty_expiry', label: 'Warranty ตัวรถ หมดอายุ', type: 'dmy', half: true, hint: 'พิมพ์ วว/ดด/ปปปป เช่น 31/12/2027' },
+    { k: 'insurance_expiry', label: 'ประกัน หมดอายุ', type: 'dmy' },
+    { k: 'warranty_expiry', label: 'Warranty ตัวรถ หมดอายุ', type: 'dmy', half: true, hint: 'พิมพ์ตัวเลข วัน/เดือน/ปี เช่น 31122027' },
     { k: 'warranty_battery_expiry', label: 'Warranty แบตเตอรี่ (ถ้ามี)', type: 'dmy', half: true },
     { k: 'spare_key_note', label: 'กุญแจสำรอง (พิมพ์อธิบาย)', type: 'textarea' },
   ]},
@@ -3212,7 +3271,7 @@ function r1FieldHtml(f, v, ro, code) {
   } else if (f.type === 'money') {
     ctl = `<input type="text" id="${id}" inputmode="decimal" autocomplete="off" oninput="r1MoneyInput(this)" value="${escapeHtml(r1MoneyShown(raw))}"${dis}>`;
   } else if (f.type === 'dmy') {
-    ctl = `<input type="text" id="${id}" inputmode="numeric" autocomplete="off" placeholder="วว/ดด/ปปปป" value="${escapeHtml(raw ? r1FmtDmy(raw) : '')}"${dis}>`;
+    ctl = `<input type="text" id="${id}" inputmode="numeric" autocomplete="off" maxlength="10" placeholder="พิมพ์ตัวเลข เช่น 31122027" oninput="r1DateInput(this)" value="${escapeHtml(raw ? r1FmtDmy(raw) : '')}"${dis}>`;
   } else if (f.type === 'slot') {
     const used = r1UsedSlots(code);
     let opts = `<option value="">— ไม่มี —</option>`;
@@ -3345,6 +3404,7 @@ async function r1Persist(code, form) {
   try {
     const composed = [d.brand, d.model_name, d.sub_model, d.year_reg || d.year_made].filter(Boolean).join(' ');
     const car = r1Car(code);
+    if (!r1EditingCode && car && car.sold && d.stock_status !== 'ขาย') d.stock_status = 'ขาย';   // รหัสนี้ขายไปแล้ว ไม่ให้ลงข้อมูลย้อนแล้วกลายเป็นว่าง
     const newSold = d.stock_status === 'ขาย';
     if (!car) {
       const { error } = await sb.from('cars').insert({ code, model: composed || code, sold: newSold });
@@ -3364,7 +3424,7 @@ async function r1Persist(code, form) {
       const { error: e3 } = await sb.from('car_private').upsert({ car_code: code, purchase_price: form.priv.purchase_price == null ? null : form.priv.purchase_price, purchase_commission: form.priv.purchase_commission == null ? null : form.priv.purchase_commission, updated_at: now }, { onConflict: 'car_code' });
       if (e3) throw e3;
     }
-    showToast('บันทึกข้อมูลรถ ' + code + ' แล้ว');
+    showToast('บันทึกข้อมูลรถ ' + code + ' แล้ว และอัปเดตรหัสรถในระบบให้แล้ว');
     closeCarDrawer();
     reloadCars();
     reloadCarDetails();
@@ -3483,16 +3543,18 @@ function openTaxModal(code) {
   if (!d) return;
   r1TaxCode = code;
   document.getElementById('r1TaxTitle').textContent = 'อัปเดตวันหมดอายุภาษี · ' + code;
-  document.getElementById('r1TaxDate').value = d.tax_expiry || '';
+  document.getElementById('r1TaxDate').value = d.tax_expiry ? r1FmtDmy(d.tax_expiry) : '';
   document.getElementById('r1TaxOverlay').classList.add('open');
 }
 function closeTaxModal() { document.getElementById('r1TaxOverlay').classList.remove('open'); r1TaxCode = null; }
 async function saveTaxModal() {
   if (!r1TaxCode) return;
   const code = r1TaxCode;
+  const pd = r1ParseDmy(document.getElementById('r1TaxDate').value);
+  if (!pd.ok) { showToast('รูปแบบวันที่ไม่ถูกต้อง — พิมพ์ตัวเลข วัน/เดือน/ปี เช่น 31122027', true); return; }
   try {
     const { error } = await sb.from('car_details').update({
-      tax_expiry: document.getElementById('r1TaxDate').value || null,
+      tax_expiry: pd.iso,
       updated_at: Date.now(),
     }).eq('code', code);
     if (error) throw error;
