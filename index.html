@@ -370,6 +370,13 @@
   .r2-info { font-size: 12.5px; color: var(--ink-soft); background: var(--paper); border: 1px solid var(--line); border-radius: 7px; padding: 9px 12px; margin-bottom: 14px; line-height: 1.6; }
   .r2-static { padding: 9px 11px; border-radius: 7px; border: 1px dashed var(--line); background: var(--paper); font-size: 13.5px; }
   .r2-add { margin-top: 2px; }
+  .r2-row.r2-row-acct { grid-template-columns: 1fr 110px 118px 30px; }
+  .r2-row select { width: 100%; padding: 9px 6px; border-radius: 7px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); font-family: var(--font-th); font-size: 13px; }
+  .r2-acct-line { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 12.5px; color: var(--muted, #888); }
+  .r2-acct-line select { flex: 1; padding: 6px 8px; border-radius: 7px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); font-family: var(--font-th); font-size: 13px; }
+  .r2-acct-sum { margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--line); }
+  .r2-acct-sum-h { font-size: 12.5px; font-weight: 600; margin-bottom: 4px; }
+  @media (max-width: 520px) { .r2-row.r2-row-acct { grid-template-columns: 1fr 96px; } .r2-row.r2-row-acct select { grid-column: 1 / 2; } }
 
   .hidden { display: none !important; }
 
@@ -781,7 +788,7 @@
         <div class="topbar-row">
           <div>
             <h2>งานทะเบียน / งานตัวรถ</h2>
-            <p class="sub">ภาษี เงินมัดจำเล่ม รถที่ต้องส่งนายทุน และการลงขายที่ยังไม่ครบ</p>
+            <p class="sub">ภาษี เงินมัดจำเล่ม รถส่งคุณหญิง และการลงขายที่ยังไม่ครบ</p>
           </div>
         </div>
       </div>
@@ -797,7 +804,7 @@
           <div id="r1DepList"></div>
         </section>
         <section class="r1-section">
-          <h3>รถที่ส่งนายทุน <span class="r1-count" id="r1DocCount">0</span></h3>
+          <h3>รถส่งคุณหญิง <span class="r1-count" id="r1DocCount">0</span></h3>
           <p class="r1-sub">รถที่ยังไม่มีวันที่ส่งเอกสาร (ครบแล้วรอส่ง / ยังไม่ครบ)</p>
           <div id="r1DocList"></div>
         </section>
@@ -1223,7 +1230,23 @@
     <div class="drawer-body" id="r2LedgerForm"></div>
     <div class="drawer-foot">
       <button class="btn btn-primary" style="flex:1;" id="r2LedgerSaveBtn" onclick="r2LedgerSave()">บันทึกบัญชีคันนี้</button>
+      <button class="btn btn-amber" onclick="r2DivOpen(r2LedgerCode, true)">ยอดปันผล</button>
       <button class="btn btn-ghost" onclick="r2LedgerClose()">ปิด</button>
+    </div>
+  </div>
+</div>
+
+<!-- ยอดปันผล (แอดมิน) -->
+<div class="overlay" id="r2DivOverlay" style="justify-content:center; align-items:center; z-index:60;" onclick="if(event.target===this) r2DivClose()">
+  <div class="drawer" style="width:min(460px,94%); height:auto; max-height:90vh; border-radius:12px;">
+    <div class="drawer-head">
+      <h3>ยอดปันผล — ยอดที่โอนคืนกองกลาง</h3>
+      <button class="drawer-close" onclick="r2DivClose()"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+    </div>
+    <div class="drawer-body" id="r2DivBody"></div>
+    <div class="drawer-foot">
+      <button class="btn btn-primary" style="flex:1;" onclick="r2DivCopy()">คัดลอกข้อมูล</button>
+      <button class="btn btn-ghost" onclick="r2DivClose()">ปิด</button>
     </div>
   </div>
 </div>
@@ -3891,7 +3914,8 @@ function askDeleteNote(id) {
 /* =================================================================
    รอบ 2 — ใบจอง / ใบส่งมอบ / ค่าคอมเซลล์ / บัญชีต่อคัน
    ================================================================= */
-const R2_INTEREST_PER_DAY = 0.005;   // ดอกเบี้ยจำนำ 0.5%/วัน ไม่ทบต้น คิดจากยอดจำนำอย่างเดียว
+const R2_INTEREST_PER_MONTH = 0.005;   // ดอกเบี้ยจำนำ 0.5%/เดือน (1 ล้าน = 5,000/เดือน) ไม่ทบต้น คิดตามวันจริง ÷ 30
+const R2_ACCOUNTS = ['เงินจอง', 'กองกลาง', 'ทุนนอก'];   // บัญชีเงินที่ใช้อยู่
 const R2_DEFAULTS = { comm_step_base: 5000, comm_step_bonus: 7000, comm_bonus_threshold: 6, comm_price_threshold: 1990000 };
 const R2_DELIV_MIN = 'case_id,case_code,car_code,sales_username,delivery_date';   // ฝ่ายทะเบียนโหลดเท่านี้ (ไม่เห็นราคา/ลูกค้า)
 const R2_BROKER_CHANNELS = ['นายหน้า', 'น้ำ', 'บี'];
@@ -4193,8 +4217,14 @@ async function saveR2Step() {
 /* ---------- หน้าใบจอง / ใบส่งมอบ ---------- */
 function r2SetKind(k) { r2Kind = k; renderR2Docs(); }
 function openR2DocNew() { openR2Doc(r2Kind, null); }
+// ค่าใช้จ่ายอื่น ๆ ในใบส่งมอบ: รายการที่เพิ่มเอง (other_items) · ถ้าไม่มี ใช้ยอดเดิม other_fee เป็น 1 รายการ
+function r2DeliveryItems(v) {
+  if (Array.isArray(v.other_items) && v.other_items.length) return v.other_items;
+  return Number(v.other_fee) > 0 ? [{ label: 'ค่าใช้จ่ายอื่น ๆ', amount: Number(v.other_fee) }] : [];
+}
+// ยอดใช้จ่ายวันออกรถ = เงินส่วนต่าง (ราคาขาย − เงินจอง อยู่ในช่องนี้แล้ว) + ค่าโอน(ถ้าระบุตัวเลข) + ประกัน + อื่น ๆ
 function r2DeliverySummary(v) {
-  return (Number(v.down_payment) || 0) + (v.transfer_mode === 'ตัวเลข' ? (Number(v.transfer_fee) || 0) : 0) + (Number(v.insurance_fee) || 0) + (Number(v.other_fee) || 0);
+  return (Number(v.down_payment) || 0) + (v.transfer_mode === 'ตัวเลข' ? (Number(v.transfer_fee) || 0) : 0) + (Number(v.insurance_fee) || 0) + r2ListSum(r2DeliveryItems(v));
 }
 function renderR2Docs() {
   const wrap = document.getElementById('r2DocTable');
@@ -4312,7 +4342,7 @@ function r2RenderDocForm(v) {
   if (kind === 'booking') {
     h += R(F('วันที่จอง', D('booking_date', v.booking_date)), carPill);
   } else {
-    h += R(F('วันที่จอง', D('booking_date', v.booking_date)), F('วันที่ออกรถ', D('delivery_date', v.delivery_date), 'ใช้ตัดสินว่านับค่าคอมเดือนไหน'));
+    h += R(F('วันที่จอง', D('booking_date', v.booking_date)), F('วันที่ออกรถ', D('delivery_date', v.delivery_date), 'ใช้นับค่าคอมเดือนนี้ · บันทึกแล้วเคสเป็น "ขายแล้ว"'));
     h += carPill;
   }
   h += R(F('เลขไมล์ (กม.)', M('mileage', v.mileage)), F('ทะเบียน', T('plate', v.plate)));
@@ -4325,11 +4355,14 @@ function r2RenderDocForm(v) {
   h += R(F('ซื้อ', S('buy_type', ['เงินสด', 'ไฟแนนซ์'], v.buy_type || 'เงินสด')), F('ไฟแนนซ์ที่จัด', T('finance_company', v.finance_company, ' list="r2FinList" autocomplete="off"'), 'พิมพ์ชื่อให้เหมือนเดิมทุกครั้ง', 'r2w_finco'));
   if (kind === 'delivery') {
     h += F('ยอดที่จัดไฟแนนซ์ (บาท)', M('finance_amount', v.finance_amount), '', 'r2w_finamt');
-    h += F('เงินดาวน์ (บาท)', M('down_payment', v.down_payment));
+    const autoGap = (Number(v.sold_price) || 0) > 0 ? (Number(v.sold_price) || 0) - (Number(v.deposit_amount) || 0) : null;
+    const gapManual = v.down_payment != null && v.down_payment !== '' && (autoGap == null || Number(v.down_payment) !== autoGap);
+    h += F('เงินส่วนต่าง (บาท)', `<input type="text" id="r2d_down_payment" inputmode="decimal" autocomplete="off" oninput="r1MoneyInput(this); this.dataset.manual = this.value.trim() ? '1' : ''" value="${escapeHtml(r1MoneyShown(gapManual || autoGap == null ? v.down_payment : autoGap))}"${gapManual ? ' data-manual="1"' : ''}>`, 'คำนวณให้อัตโนมัติ = ราคาที่ขายไป − เงินจอง · พิมพ์ตัวเลขเองได้ · ลบให้ว่างเพื่อกลับไปใช้ค่าอัตโนมัติ');
   }
   h += R(F('ค่าจัดโอน', tmSel), F('จำนวนค่าจัดโอน (บาท)', M('transfer_fee', v.transfer_fee), '', 'r2w_transfer'));
   if (kind === 'delivery') {
-    h += R(F('ค่าประกัน (ถ้ามี)', M('insurance_fee', v.insurance_fee)), F('ค่าใช้จ่ายอื่น ๆ (ถ้ามี)', M('other_fee', v.other_fee)));
+    h += F('ค่าประกัน (ถ้ามี)', M('insurance_fee', v.insurance_fee));
+    h += `<div class="field"><label>ค่าใช้จ่ายอื่น ๆ (ถ้ามี)</label><div id="r2d_otherItems">${r2DeliveryItems(v).map(x => r2RowHtml(x.label, x.amount, 'r2DocUpdate()')).join('')}</div><button type="button" class="btn btn-ghost btn-sm r2-add" onclick="r2AddRow('r2d_otherItems', 'r2DocUpdate()')">+ เพิ่มรายการ</button><div class="hint">ใส่ชื่อรายการและจำนวนเงิน เพิ่มได้หลายรายการ</div></div>`;
   }
   h += R(F('ช่องทาง', S('channel', chOpts, v.channel || CHANNELS[0])), F('รหัสนายหน้า', T('broker_code', v.broker_code, ' placeholder="NC001"'), 'ว่างได้ถ้าไม่มีนายหน้า', 'r2w_broker'));
   h += R(F('ชื่อลูกค้า', T('customer_name', v.customer_name)), F('เบอร์ติดต่อ', T('customer_phone', v.customer_phone)));
@@ -4378,19 +4411,28 @@ function r2DocUpdate() {
   show('r2w_finamt', fin);
   const ch = g('channel');
   if (ch) show('r2w_broker', R2_BROKER_CHANNELS.indexOf(ch.value) !== -1);
+  const gapEl = g('down_payment');
+  if (gapEl && !(gapEl.dataset ? gapEl.dataset.manual : '1')) {
+    const sp = g('sold_price') ? (r1Num(g('sold_price').value) || 0) : 0;
+    const dp = g('deposit_amount') ? (r1Num(g('deposit_amount').value) || 0) : 0;
+    gapEl.value = sp > 0 ? r1MoneyShown(sp - dp) : '';
+  }
   const sum = document.getElementById('r2d_sum');
   if (sum) {
     const n = id => { const el = g(id); return el ? (r1Num(el.value) || 0) : 0; };
     const mode = tm ? tm.value : 'แถม';
     const transfer = mode === 'ตัวเลข' ? n('transfer_fee') : 0;
-    const total = n('down_payment') + transfer + n('insurance_fee') + n('other_fee');
+    const items = r2ReadRows('r2d_otherItems');
+    const otherSum = r2ListSum(items);
+    const dep = n('deposit_amount');
+    const total = n('down_payment') + transfer + n('insurance_fee') + otherSum;
     const trLbl = mode === 'ตามจริง' ? 'ค่าจัดโอน (เก็บตามจริง — ยังไม่รวมในยอด)' : mode === 'แถม' ? 'ค่าจัดโอน (แถม)' : 'ค่าจัดโอน';
     sum.innerHTML = `
-      <div class="r2-sum-row"><span>เงินดาวน์</span><span class="num">${r2M(n('down_payment'))}</span></div>
+      <div class="r2-sum-row"><span>เงินส่วนต่าง (ราคาขาย − เงินจอง ${r2M(dep)})</span><span class="num">${r2M(n('down_payment'))}</span></div>
       <div class="r2-sum-row"><span>${trLbl}</span><span class="num">${r2M(transfer)}</span></div>
       <div class="r2-sum-row"><span>ค่าประกัน</span><span class="num">${r2M(n('insurance_fee'))}</span></div>
-      <div class="r2-sum-row"><span>ค่าใช้จ่ายอื่น ๆ</span><span class="num">${r2M(n('other_fee'))}</span></div>
-      <div class="r2-sum-row total"><span>รวมยอดใช้จ่ายวันออกรถ</span><span class="num">${r2M(total)} บาท</span></div>`;
+      ${items.length ? items.map(x => `<div class="r2-sum-row"><span>${escapeHtml(x.label || 'ค่าใช้จ่ายอื่น ๆ')}</span><span class="num">${r2M(x.amount || 0)}</span></div>`).join('') : '<div class="r2-sum-row"><span>ค่าใช้จ่ายอื่น ๆ</span><span class="num">0</span></div>'}
+      <div class="r2-sum-row total"><span>รวมยอดใช้จ่ายวันออกรถ (หักเงินจองแล้ว)</span><span class="num">${r2M(total)} บาท</span></div>`;
   }
 }
 
@@ -4429,7 +4471,8 @@ function r2DocRead() {
     rec.finance_amount = buy_type === 'ไฟแนนซ์' ? n('finance_amount') : null;
     rec.down_payment = n('down_payment');
     rec.insurance_fee = n('insurance_fee');
-    rec.other_fee = n('other_fee');
+    rec.other_items = r2ReadRows('r2d_otherItems');
+    rec.other_fee = r2ListSum(rec.other_items);   // เก็บยอดรวมไว้ที่คอลัมน์เดิมด้วย
   }
   return rec;
 }
@@ -4455,13 +4498,15 @@ async function r2SaveDoc() {
   try {
     const { error } = await sb.from(kind === 'booking' ? 'car_bookings' : 'car_deliveries').upsert(rec, { onConflict: 'case_id' });
     if (error) throw error;
-    let effectErr = null;
-    try { await r2ApplyEffects(kind, rec); } catch (e) { effectErr = e; }
+    let effectErr = null, eff = null;
+    try { eff = await r2ApplyEffects(kind, rec); } catch (e) { effectErr = e; }
     showToast(effectErr
-      ? 'บันทึกแล้ว แต่อัปเดตสถานะรถไม่สำเร็จ: ' + effectErr.message
-      : (kind === 'booking' ? 'บันทึกใบจองแล้ว' : 'บันทึกใบส่งมอบแล้ว — รถ ' + (rec.car_code || '') + ' เป็นสถานะ "ขาย"'), !!effectErr);
+      ? 'บันทึกแล้ว แต่อัปเดตสถานะรถ/เคสไม่สำเร็จ: ' + effectErr.message
+      : (kind === 'booking' ? 'บันทึกใบจองแล้ว'
+        : 'บันทึกใบส่งมอบแล้ว — รถ ' + (rec.car_code || '') + ' เป็น "ขาย" และเคส ' + (rec.case_code || '') + ' เป็น "ขายแล้ว"'
+          + (eff && eff.closedSiblings ? ` · ปิดเคสอื่นของรถคันนี้อีก ${eff.closedSiblings} เคสอัตโนมัติ` : '')), !!effectErr);
     closeR2Doc();
-    reloadR2Bookings(); reloadR2Deliveries(); reloadCars(); reloadCarDetails();
+    reloadR2Bookings(); reloadR2Deliveries(); reloadCars(); reloadCarDetails(); reloadCases();
   } catch (e) {
     showToast('บันทึกไม่สำเร็จ: ' + e.message, true);
   } finally {
@@ -4469,28 +4514,48 @@ async function r2SaveDoc() {
   }
 }
 
-/* ใบจอง → สถานะรถ "จอง" / ใบส่งมอบ → "ขาย" + sold_date = วันที่ออกรถ */
+/* ใบจอง → สถานะรถ "จอง"
+   ใบส่งมอบ → รถ "ขาย" + sold_date = วันที่ออกรถ + เคสเป็น "ขายแล้ว"
+   (ทำเหมือนหน้าเคส: ปิดเคสอื่นของรถคันเดียวกันที่ยังติดตาม/ติดจองอยู่เป็น "เลิกติดตาม") */
 async function r2ApplyEffects(kind, rec) {
   const code = rec.car_code;
-  if (!code) return;
+  const out = { closedSiblings: 0 };
+  if (!code) return out;
   const car = r1Car(code), d = carDetails[code];
   if (kind === 'booking') {
     if (d && !(car && car.sold) && d.stock_status !== 'จอง' && d.stock_status !== 'ขาย') {
       const { error } = await sb.from('car_details').update({ stock_status: 'จอง', updated_at: Date.now() }).eq('code', code);
       if (error) throw error;
     }
-    return;
+    return out;
   }
-  if (car && (!car.sold || !car.soldCaseId)) {
-    const patch = { sold: true };
-    if (!car.soldCaseId) patch.sold_case_id = rec.case_id;
-    const { error } = await sb.from('cars').update(patch).eq('code', code);
-    if (error) throw error;
+  const cs = cases.find(x => String(x.id) === String(rec.case_id));
+  if (car) {
+    // เคสที่ผูกกับการขายก่อนหน้า (เช่น ขายแล้วถูกคืนรถ) ไม่ถือว่ายังขายอยู่ → ให้เคสนี้เป็นเคสที่ขายแทน
+    const prev = car.soldCaseId ? cases.find(x => String(x.id) === String(car.soldCaseId)) : null;
+    const prevStillSold = !!prev && String(prev.id) !== String(rec.case_id) && prev.status === SOLD_STATUS;
+    if (!car.sold || (!prevStillSold && String(car.soldCaseId || '') !== String(rec.case_id))) {
+      const patch = { sold: true };
+      if (!prevStillSold) patch.sold_case_id = rec.case_id;
+      const { error } = await sb.from('cars').update(patch).eq('code', code);
+      if (error) throw error;
+    }
   }
   if (d) {
     const { error } = await sb.from('car_details').update({ stock_status: 'ขาย', sold_date: rec.delivery_date, updated_at: Date.now() }).eq('code', code);
     if (error) throw error;
   }
+  if (cs && cs.status !== SOLD_STATUS) {
+    const now = Date.now();
+    const { error } = await sb.from('cases').update({ status: SOLD_STATUS, closed_at: cs.closedAt || now, last_updated: now }).eq('id', cs.id);
+    if (error) throw error;
+    const siblings = cases.filter(x => x.carCode === code && String(x.id) !== String(cs.id) && isOpenStatus(x.status));
+    if (siblings.length) {
+      const { error: e2 } = await sb.from('cases').update({ status: 'เลิกติดตาม', closed_at: now, last_updated: now }).in('id', siblings.map(x => x.id));
+      if (!e2) out.closedSiblings = siblings.length;
+    }
+  }
+  return out;
 }
 
 function r2AskDeleteDoc(kind, caseId) {
@@ -4498,14 +4563,14 @@ function r2AskDeleteDoc(kind, caseId) {
   const rec = (kind === 'booking' ? r2Bookings : r2Deliveries)[caseId];
   if (!rec) return;
   openConfirm('ลบ' + (kind === 'booking' ? 'ใบจอง' : 'ใบส่งมอบ') + 'นี้?',
-    kind === 'booking' ? 'ถ้ารถอยู่สถานะ "จอง" และไม่มีใบอื่น จะกลับเป็น "ว่าง"' : 'รถจะกลับเป็น "จอง" (ถ้ามีใบจอง) หรือ "ว่าง" — เว้นแต่เคสยังเป็น "ขายแล้ว" หรือมีใบส่งมอบอื่นของรถคันนี้',
+    kind === 'booking' ? 'ถ้ารถอยู่สถานะ "จอง" และไม่มีใบอื่น จะกลับเป็น "ว่าง"' : 'เคสจะกลับเป็น "ติดจอง" (ถ้ามีใบจอง) หรือ "ติดตาม" และรถกลับเป็น "จอง"/"ว่าง" — เคสอื่นของรถคันนี้ที่ถูกปิดอัตโนมัติไว้จะไม่ถูกเปิดกลับให้',
     async () => {
       try {
         const { error } = await sb.from(kind === 'booking' ? 'car_bookings' : 'car_deliveries').delete().eq('case_id', caseId);
         if (error) throw error;
         try { await r2RevertAfterDelete(kind, rec); } catch (e) { showToast('ลบแล้ว แต่ปรับสถานะรถไม่สำเร็จ: ' + e.message, true); }
         showToast('ลบแล้ว');
-        reloadR2Bookings(); reloadR2Deliveries(); reloadCars(); reloadCarDetails();
+        reloadR2Bookings(); reloadR2Deliveries(); reloadCars(); reloadCarDetails(); reloadCases();
       } catch (e) { showToast('ลบไม่สำเร็จ: ' + e.message, true); }
     });
 }
@@ -4515,7 +4580,7 @@ async function r2RevertAfterDelete(kind, rec) {
   const car = r1Car(code), d = carDetails[code];
   const otherBooking = Object.values(r2Bookings).some(b => b.car_code === code && b.case_id !== rec.case_id);
   const otherDelivery = Object.values(r2Deliveries).some(x => x.car_code === code && x.case_id !== rec.case_id);
-  const stillSoldCase = cases.some(c => c.carCode === code && c.status === SOLD_STATUS);
+  const stillSoldCase = cases.some(c => c.carCode === code && String(c.id) !== String(rec.case_id) && c.status === SOLD_STATUS);   // เคสอื่นที่ยังขายรถคันนี้อยู่
   if (kind === 'booking') {
     const hasDelivery = otherDelivery || !!r2Deliveries[rec.case_id];
     if (d && d.stock_status === 'จอง' && !otherBooking && !hasDelivery) {
@@ -4523,6 +4588,12 @@ async function r2RevertAfterDelete(kind, rec) {
       if (error) throw error;
     }
     return;
+  }
+  // ลบใบส่งมอบ: เคสที่ใบนี้ตั้งเป็น "ขายแล้ว" ย้อนกลับเป็นติดจอง/ติดตาม
+  const own = cases.find(x => String(x.id) === String(rec.case_id));
+  if (own && own.status === SOLD_STATUS) {
+    const { error } = await sb.from('cases').update({ status: r2Bookings[rec.case_id] ? 'ติดจอง' : 'ติดตาม', closed_at: null, last_updated: Date.now() }).eq('id', own.id);
+    if (error) throw error;
   }
   if (stillSoldCase || otherDelivery) return;
   if (car && car.sold && (!car.soldCaseId || String(car.soldCaseId) === String(rec.case_id))) {
@@ -4564,10 +4635,10 @@ function r2SlipLines(kind, v) {
   } else {
     add('เงินจอง', m(v.deposit_amount));
     if (v.buy_type === 'ไฟแนนซ์') add('ยอดที่จัดไฟแนนซ์', m(v.finance_amount));
-    add('เงินดาวน์', m(v.down_payment));
+    add('เงินส่วนต่าง', m(v.down_payment));
     add('ค่าจัดโอน', tf);
     if (Number(v.insurance_fee) > 0) add('ค่าประกัน', m(v.insurance_fee));
-    if (Number(v.other_fee) > 0) add('ค่าใช้จ่ายอื่น ๆ', m(v.other_fee));
+    r2DeliveryItems(v).forEach(x => add(x.label || 'ค่าใช้จ่ายอื่น ๆ', m(x.amount)));
     add('ซื้อ', buy);
   }
   add('ช่องทาง', ch);
@@ -4575,7 +4646,7 @@ function r2SlipLines(kind, v) {
   add('เบอร์ติดต่อ', v.customer_phone || '—');
   add('เซลล์ผู้ดูแล', v.sales_username ? salesDisplayName(v.sales_username) : '');
   if (kind === 'booking') add('หมายเหตุ', v.note);
-  if (kind === 'delivery') add('สรุปยอดใช้จ่ายวันออกรถ', m(r2DeliverySummary(v)) + (v.transfer_mode === 'ตามจริง' ? ' (ไม่รวมค่าจัดโอนเก็บตามจริง)' : ''), true);
+  if (kind === 'delivery') add('สรุปยอดใช้จ่ายวันออกรถ (หักเงินจองแล้ว)', m(r2DeliverySummary(v)) + (v.transfer_mode === 'ตามจริง' ? ' (ไม่รวมค่าจัดโอนเก็บตามจริง)' : ''), true);
   return { title: kind === 'booking' ? 'ใบจองรถ' : 'ใบส่งมอบรถ', lines: L };
 }
 async function r2SlipCopy() {
@@ -4692,7 +4763,7 @@ function r2CostOf(code, Lo) {
   const pledgeDate = r1PledgeDate(d);
   const endDate = L.pledge_returned_date || r1TodayStr();
   const days = pledgeDate ? r2DaysBetween(pledgeDate, endDate) : null;
-  const interest = days == null ? 0 : pledge * R2_INTEREST_PER_DAY * days;
+  const interest = days == null ? 0 : pledge * R2_INTEREST_PER_MONTH * days / 30;
   const comm = refs.delivery ? r2Commission(refs.delivery) : null;
   const salesComm = comm ? comm.amount : 0;
   const tmode = refs.delivery ? refs.delivery.transfer_mode : (refs.booking ? refs.booking.transfer_mode : null);
@@ -4705,8 +4776,30 @@ function r2CostOf(code, Lo) {
   const depositAuto = refs.delivery ? num(refs.booking ? refs.booking.deposit_amount : refs.delivery.deposit_amount) : 0;
   const depositPending = (!refs.delivery && refs.booking) ? num(refs.booking.deposit_amount) : 0;
   const transferCollected = (tmode === 'ตามจริง' && L.transfer_status === 'เก็บเงินแล้ว') ? transferActual : 0;
-  const income = depositAuto + num(L.release_money) + num(L.finance_income) + num(L.forfeited_deposit) + r2ListSum(L.other_income) + transferCollected;
-  return { hasPrice, price, buyComm, pledge, adjust, pledgeDate, endDate, days, interest, salesComm, comm, tmode, transferActual, otherExp, rest, cost, depositAuto, depositPending, transferCollected, income, profit: income - cost, refs, returned: !!L.pledge_returned_date };
+  const income = depositAuto + num(L.release_money) + num(L.finance_income) + num(L.finance_commission) + num(L.forfeited_deposit) + r2ListSum(L.other_income) + transferCollected;
+  // แยกตามบัญชีเงิน (เงินจอง / กองกลาง / ทุนนอก) — รายการที่ไม่ได้เลือกบัญชีรวมเป็น "ไม่ระบุ"
+  const A = L.accounts || {};
+  const byAcct = {};
+  R2_ACCOUNTS.concat(['ไม่ระบุ']).forEach(a => { byAcct[a] = { out: 0, in: 0 }; });
+  const put = (acc, dir, amt) => { if (!amt) return; const k = byAcct[acc] ? acc : 'ไม่ระบุ'; byAcct[k][dir] += amt; };
+  put(A.pledge, 'out', pledge);
+  put(A.pledge_adjust, 'out', adjust);
+  put(A.interest, 'out', interest);
+  put(A.closing_amount, 'out', num(L.closing_amount));
+  put(A.inspect_fee, 'out', num(L.inspect_fee));
+  put(A.broker_sell_fee, 'out', num(L.broker_sell_fee));
+  put(A.wash_fee, 'out', num(L.wash_fee));
+  put(A.sales_comm, 'out', salesComm);
+  put(A.transfer_actual, 'out', transferActual);
+  (L.other_expenses || []).forEach(x => put(x.account, 'out', num(x.amount)));
+  put(A.deposit || 'เงินจอง', 'in', depositAuto);
+  put(A.release_money, 'in', num(L.release_money));
+  put(A.finance_income, 'in', num(L.finance_income));
+  put(A.finance_commission, 'in', num(L.finance_commission));
+  put(A.forfeited_deposit, 'in', num(L.forfeited_deposit));
+  put(A.transfer_collected, 'in', transferCollected);
+  (L.other_income || []).forEach(x => put(x.account, 'in', num(x.amount)));
+  return { hasPrice, price, buyComm, pledge, adjust, pledgeDate, endDate, days, interest, salesComm, comm, tmode, transferActual, otherExp, rest, cost, depositAuto, depositPending, transferCollected, income, profit: income - cost, refs, byAcct, returned: !!L.pledge_returned_date };
 }
 
 function r2RenderLedger() {
@@ -4721,7 +4814,7 @@ function r2RenderLedger() {
   let rows = all.filter(r => f === 'all' ? true : f === 'sold' ? r.st === 'ขาย' : r.st !== 'ขาย');
   if (search) rows = rows.filter(r => [r.code, r1Title(r.code), (carDetails[r.code] || {}).plate].join(' ').toLowerCase().includes(search));
   if (!rows.length) { body.innerHTML = '<div class="empty-state"><div class="big">ไม่มีรถในมุมมองนี้</div></div>'; return; }
-  body.innerHTML = `<table><thead><tr><th>รหัสรถ</th><th>รถ</th><th>สถานะ</th><th>ต้นทุน ณ ปัจจุบัน</th><th>รายรับ</th><th>กำไร/ขาดทุน</th><th>ข้อสังเกต</th></tr></thead><tbody>` +
+  body.innerHTML = `<table><thead><tr><th>รหัสรถ</th><th>รถ</th><th>สถานะ</th><th>ต้นทุน ณ ปัจจุบัน</th><th>รายรับ</th><th>กำไร/ขาดทุน</th><th>ข้อสังเกต</th><th></th></tr></thead><tbody>` +
     rows.map(r => {
       const c = r.c, col = R1_STATUS_COLOR[r.st];
       const flags = [];
@@ -4737,25 +4830,35 @@ function r2RenderLedger() {
         <td>${c.income ? r2M(c.income) : '<span class="muted">—</span>'}</td>
         <td>${showProfit ? `<b class="${c.profit >= 0 ? 'r2-pos' : 'r2-neg'}">${c.profit >= 0 ? '+' : ''}${r2M(c.profit)}</b>` : '<span class="muted">—</span>'}</td>
         <td>${flags.map(x => `<span class="r2-flag">${x}</span>`).join(' ') || '<span class="muted">—</span>'}</td>
+        <td>${r.st === 'ขาย' ? `<button class="btn btn-ghost btn-sm" data-code="${escapeHtml(r.code)}" onclick="event.stopPropagation(); r2DivOpen(this.dataset.code)">ยอดปันผล</button>` : ''}</td>
       </tr>`;
     }).join('') + '</tbody></table>';
 }
 
-function r2RowHtml(label, amount) {
-  return `<div class="r2-row"><input type="text" class="r2-lbl" placeholder="รายการ" value="${escapeHtml(label || '')}"><input type="text" class="r2-amt" inputmode="decimal" autocomplete="off" placeholder="บาท" oninput="r1MoneyInput(this)" value="${escapeHtml(r1MoneyShown(amount))}"><button type="button" class="icon-btn danger" title="ลบแถว" onclick="this.parentNode.remove(); r2LedgerPreview()">×</button></div>`;
+function r2AcctSel(cls, val) {
+  return `<select class="${cls}" title="บัญชีเงิน"><option value="">— บัญชี —</option>` + R2_ACCOUNTS.map(a => `<option value="${a}"${a === val ? ' selected' : ''}>${a}</option>`).join('') + '</select>';
 }
-function r2AddRow(id) {
+// acct: undefined = ไม่มีช่องบัญชี (ใบส่งมอบ) · '' หรือชื่อบัญชี = มีช่องบัญชี (บัญชีต่อคัน)
+function r2RowHtml(label, amount, cb, acct) {
+  const hasAcct = acct !== undefined;
+  return `<div class="r2-row${hasAcct ? ' r2-row-acct' : ''}"><input type="text" class="r2-lbl" placeholder="รายการ" value="${escapeHtml(label || '')}"><input type="text" class="r2-amt" inputmode="decimal" autocomplete="off" placeholder="บาท" oninput="r1MoneyInput(this)" value="${escapeHtml(r1MoneyShown(amount))}">${hasAcct ? r2AcctSel('r2-acc', acct) : ''}<button type="button" class="icon-btn danger" title="ลบแถว" onclick="this.parentNode.remove(); ${cb || 'r2LedgerPreview()'}">×</button></div>`;
+}
+function r2AddRow(id, cb, withAcct) {
   const box = document.getElementById(id);
   if (!box) return;
-  box.insertAdjacentHTML('beforeend', r2RowHtml('', null));
+  box.insertAdjacentHTML('beforeend', r2RowHtml('', null, cb, withAcct ? '' : undefined));
   const last = box.lastElementChild;
   if (last) last.querySelector('.r2-lbl').focus();
 }
 function r2ReadRows(id) {
   const box = document.getElementById(id);
   if (!box) return [];
-  return Array.from(box.querySelectorAll('.r2-row')).map(r => ({ label: r.querySelector('.r2-lbl').value.trim(), amount: r1Num(r.querySelector('.r2-amt').value) }))
-    .filter(x => x.label || x.amount != null);
+  return Array.from(box.querySelectorAll('.r2-row')).map(r => {
+    const o = { label: r.querySelector('.r2-lbl').value.trim(), amount: r1Num(r.querySelector('.r2-amt').value) };
+    const a = r.querySelector('.r2-acc');
+    if (a && a.value) o.account = a.value;
+    return o;
+  }).filter(x => x.label || x.amount != null);
 }
 
 function r2LedgerOpen(code) {
@@ -4776,6 +4879,8 @@ function r2LedgerRender(code) {
   const F = (label, ctl, hint) => `<div class="field"><label>${label}</label>${ctl}${hint ? '<div class="hint">' + hint + '</div>' : ''}</div>`;
   const M = (id, val) => `<input type="text" id="r2l_${id}" inputmode="decimal" autocomplete="off" oninput="r1MoneyInput(this)" value="${escapeHtml(r1MoneyShown(val))}">`;
   const R = (...c) => `<div class="field-row">${c.join('')}</div>`;
+  const AC = (key, def) => `<div class="r2-acct-line"><span>บัญชี</span><select id="r2l_acct_${key}"><option value="">— ไม่ระบุ —</option>` + R2_ACCOUNTS.map(a => `<option value="${a}"${a === ((L.accounts && L.accounts[key]) || def) ? ' selected' : ''}>${a}</option>`).join('') + '</select></div>';
+  const FA = (label, ctl, hint, key, def) => F(label, ctl + AC(key, def), hint);
 
   let h = `<div class="r2-info">
     ราคารับซื้อ: <b>${pv.purchase_price != null ? r2M(pv.purchase_price) : '— (ยังไม่กรอก)'}</b> บาท · ค่าคอมซื้อ: <b>${pv.purchase_commission != null ? r2M(pv.purchase_commission) : '—'}</b><br>
@@ -4784,44 +4889,129 @@ function r2LedgerRender(code) {
   </div>`;
 
   h += `<div class="r1-form-section" style="border-top:none; padding-top:0;"><h4>รายจ่าย</h4>`;
-  h += F('ยอดจำนำ (ราคารับซื้อ + ค่าคอมนายหน้าซื้อ)', `<div class="r2-static">${c0.hasPrice ? r2M(c0.pledge) + ' บาท' : '—'}</div>`);
+  h += FA('ยอดจำนำ (ราคารับซื้อ + ค่าคอมนายหน้าซื้อ)', `<div class="r2-static">${c0.hasPrice ? r2M(c0.pledge) + ' บาท' : '—'}</div>`, '', 'pledge');
   h += R(
     F('ยอดจำนำขาด / เกิน', `<select id="r2l_pledge_adjust_type"><option value="">— ไม่มี —</option><option value="ขาด"${L.pledge_adjust_type === 'ขาด' ? ' selected' : ''}>จำนำขาด (ต้นทุนเพิ่ม +)</option><option value="เกิน"${L.pledge_adjust_type === 'เกิน' ? ' selected' : ''}>จำนำเกิน (ต้นทุนลด −)</option></select>`),
-    F('จำนวน (บาท)', M('pledge_adjust_amount', L.pledge_adjust_amount), 'กรอกเป็นจำนวนบวก ระบบใส่เครื่องหมายให้'));
+    FA('จำนวน (บาท)', M('pledge_adjust_amount', L.pledge_adjust_amount), 'กรอกเป็นจำนวนบวก ระบบใส่เครื่องหมายให้', 'pledge_adjust'));
+  h += F('ดอกเบี้ย (คำนวณ 0.5%/เดือน)', `<div class="r2-static">${c0.days == null ? '—' : r2M(c0.interest) + ' บาท (' + c0.days + ' วัน)'}</div>` + AC('interest'));
   h += F('วันที่คืนจำนำ', `<input type="text" id="r2l_pledge_returned_date" inputmode="numeric" autocomplete="off" maxlength="10" placeholder="พิมพ์ตัวเลข เช่น 31122027" oninput="r1DateInput(this)" value="${escapeHtml(L.pledge_returned_date ? r1FmtDmy(L.pledge_returned_date) : '')}">`, 'ใส่เมื่อคืนจำนำแล้ว ดอกเบี้ยจะหยุดนับ · ว่าง = นับถึงวันนี้');
-  h += F('ยอดปิดไฟแนนซ์ (เฉพาะกรณียังไม่รวมในราคารับซื้อ)', M('closing_amount', L.closing_amount), 'เงินมัดจำเล่มไม่นับเป็นต้นทุน');
-  h += R(F('ค่าดูรถ', M('inspect_fee', L.inspect_fee)), F('ค่าคอมนายหน้าขาย', M('broker_sell_fee', L.broker_sell_fee)));
-  h += F('ค่าล้างรถ', M('wash_fee', L.wash_fee));
+  h += FA('ยอดปิดไฟแนนซ์ (เฉพาะกรณียังไม่รวมในราคารับซื้อ)', M('closing_amount', L.closing_amount), 'เงินมัดจำเล่มไม่นับเป็นต้นทุน', 'closing_amount');
+  h += R(FA('ค่าคอมซื้อ', M('inspect_fee', L.inspect_fee), '', 'inspect_fee'), FA('ค่าคอมนายหน้าขาย', M('broker_sell_fee', L.broker_sell_fee), '', 'broker_sell_fee'));
+  h += FA('ค่าล้างรถ', M('wash_fee', L.wash_fee), '', 'wash_fee');
   h += F('ค่าคอมเซลล์ขาย (คำนวณจากใบส่งมอบ)', `<div class="r2-static">${c0.comm
     ? `${escapeHtml(salesDisplayName(r2SalesOf(refs.delivery)))} · ${c0.comm.steps} สเต็ป × ${r2M(c0.comm.rate)} = <b>${r2M(c0.comm.amount)}</b> บาท${c0.comm.manual ? ' <span class="r2-flag">แก้ด้วยมือ</span>' : ''}`
-    : 'ยังไม่มีใบส่งมอบ'}</div>`, 'แก้สเต็ปได้ที่หน้า "ค่าคอมเซลล์"');
+    : 'ยังไม่มีใบส่งมอบ'}</div>`, 'แก้สเต็ปได้ที่หน้า "ค่าคอมเซลล์"').replace(/<\/div>$/, AC('sales_comm') + '</div>');
   if (c0.tmode === 'ตามจริง') {
     h += R(
-      F('ค่าจัดโอน (ยอดจริงที่ร้านจ่าย)', M('transfer_actual', L.transfer_actual), 'ใบนี้ระบุเก็บตามจริง'),
-      F('การเก็บเงินจากลูกค้า', `<select id="r2l_transfer_status"><option value="ยังไม่เก็บ"${L.transfer_status !== 'เก็บเงินแล้ว' ? ' selected' : ''}>ยังไม่เก็บ</option><option value="เก็บเงินแล้ว"${L.transfer_status === 'เก็บเงินแล้ว' ? ' selected' : ''}>เก็บเงินแล้ว</option></select>`, 'เก็บแล้ว = นับเป็นรายรับเท่ายอดจริง'));
+      FA('ค่าจัดโอน (ยอดจริงที่ร้านจ่าย)', M('transfer_actual', L.transfer_actual), 'ใบนี้ระบุเก็บตามจริง', 'transfer_actual'),
+      FA('การเก็บเงินจากลูกค้า', `<select id="r2l_transfer_status"><option value="ยังไม่เก็บ"${L.transfer_status !== 'เก็บเงินแล้ว' ? ' selected' : ''}>ยังไม่เก็บ</option><option value="เก็บเงินแล้ว"${L.transfer_status === 'เก็บเงินแล้ว' ? ' selected' : ''}>เก็บเงินแล้ว</option></select>`, 'เก็บแล้ว = นับเป็นรายรับเท่ายอดจริง (บัญชีของรายรับก้อนนี้)', 'transfer_collected'));
   }
-  h += `<div class="field"><label>ค่าใช้จ่ายอื่น ๆ</label><div id="r2l_otherExp">${(L.other_expenses || []).map(x => r2RowHtml(x.label, x.amount)).join('')}</div><button type="button" class="btn btn-ghost btn-sm r2-add" onclick="r2AddRow('r2l_otherExp')">+ เพิ่มแถว</button></div>`;
+  h += `<div class="field"><label>ค่าใช้จ่ายอื่น ๆ</label><div id="r2l_otherExp">${(L.other_expenses || []).map(x => r2RowHtml(x.label, x.amount, null, x.account || '')).join('')}</div><button type="button" class="btn btn-ghost btn-sm r2-add" onclick="r2AddRow('r2l_otherExp', null, true)">+ เพิ่มแถว</button></div>`;
   h += `</div>`;
 
   h += `<div class="r1-form-section"><h4>รายรับ</h4>`;
   h += F('เงินจอง (จากใบจอง/ใบส่งมอบ)', `<div class="r2-static">${refs.delivery
     ? r2M(c0.depositAuto) + ' บาท'
-    : (c0.depositPending ? 'มีใบจอง ' + r2M(c0.depositPending) + ' บาท — จะนับเป็นรายรับเมื่อมีใบส่งมอบ' : 'ยังไม่มีใบจอง/ใบส่งมอบ')}</div>`, 'ถ้ายกเลิกการจองและยึดเงินจอง ให้ใส่ที่ช่อง "ยึดเงินจอง" ด้านล่าง');
-  h += R(F('เงินปล่อยรถ', M('release_money', L.release_money)), F('เงินไฟแนนซ์', M('finance_income', L.finance_income)));
+    : (c0.depositPending ? 'มีใบจอง ' + r2M(c0.depositPending) + ' บาท — จะนับเป็นรายรับเมื่อมีใบส่งมอบ' : 'ยังไม่มีใบจอง/ใบส่งมอบ')}</div>` + AC('deposit', 'เงินจอง'), 'ถ้ายกเลิกการจองและยึดเงินจอง ให้ใส่ที่ช่อง "ยึดเงินจอง" ด้านล่าง');
+  h += R(FA('เงินปล่อยรถ', M('release_money', L.release_money), '', 'release_money'), FA('เงินไฟแนนซ์', M('finance_income', L.finance_income), '', 'finance_income'));
   if (refs.delivery) {
     const bits = [];
-    if (Number(refs.delivery.down_payment) > 0) bits.push('เงินดาวน์ในใบส่งมอบ ' + r2M(refs.delivery.down_payment));
+    if (Number(refs.delivery.down_payment) > 0) bits.push('เงินส่วนต่างในใบส่งมอบ ' + r2M(refs.delivery.down_payment));
     if (Number(refs.delivery.finance_amount) > 0) bits.push('ยอดจัดไฟแนนซ์ ' + r2M(refs.delivery.finance_amount));
     if (bits.length) h += `<div class="muted" style="margin:-8px 0 14px;">อ้างอิงจากใบส่งมอบ: ${bits.join(' · ')} (ไม่ไหลเข้าอัตโนมัติ — กรอกยอดจริงที่ได้รับ)</div>`;
   }
-  h += F('ยึดเงินจอง', M('forfeited_deposit', L.forfeited_deposit));
-  h += `<div class="field"><label>รายรับอื่น ๆ</label><div id="r2l_otherInc">${(L.other_income || []).map(x => r2RowHtml(x.label, x.amount)).join('')}</div><button type="button" class="btn btn-ghost btn-sm r2-add" onclick="r2AddRow('r2l_otherInc')">+ เพิ่มแถว</button></div>`;
+  h += FA('ค่าคอมไฟแนนซ์ (ถ้ามี)', M('finance_commission', L.finance_commission), '', 'finance_commission');
+  h += FA('ยึดเงินจอง', M('forfeited_deposit', L.forfeited_deposit), '', 'forfeited_deposit');
+  h += `<div class="field"><label>รายรับอื่น ๆ</label><div id="r2l_otherInc">${(L.other_income || []).map(x => r2RowHtml(x.label, x.amount, null, x.account || '')).join('')}</div><button type="button" class="btn btn-ghost btn-sm r2-add" onclick="r2AddRow('r2l_otherInc', null, true)">+ เพิ่มแถว</button></div>`;
   h += F('หมายเหตุ', `<textarea id="r2l_note">${escapeHtml(L.note || '')}</textarea>`);
   h += `</div>`;
 
   h += `<div class="r1-form-section"><h4>ต้นทุน ณ ปัจจุบัน (คำนวณเอง)</h4><div id="r2l_warn"></div><div class="r2-sum" id="r2l_sum"></div></div>`;
   document.getElementById('r2LedgerForm').innerHTML = `<div oninput="r2LedgerPreview()" onchange="r2LedgerPreview()">${h}</div>`;
   r2LedgerPreview();
+}
+
+const R2_ACCT_KEYS = ['pledge', 'pledge_adjust', 'interest', 'closing_amount', 'inspect_fee', 'broker_sell_fee', 'wash_fee', 'sales_comm', 'transfer_actual', 'transfer_collected', 'deposit', 'release_money', 'finance_income', 'finance_commission', 'forfeited_deposit'];
+function r2ReadAccounts(old) {
+  const out = {};
+  const prev = (old && old.accounts) || {};
+  R2_ACCT_KEYS.forEach(k => {
+    const el = document.getElementById('r2l_acct_' + k);
+    const v = el ? el.value : prev[k];       // ช่องที่ไม่ได้แสดง (เช่น ค่าจัดโอน) คงค่าเดิมไว้
+    if (v) out[k] = v;
+  });
+  return out;
+}
+
+/* ---------- ยอดปันผล (ยอดที่โอนคืนกองกลาง) ---------- */
+function r2DivCompute(code, Lo) {
+  const c = r2CostOf(code, Lo);
+  const L = Lo || r2Ledger[code] || {};
+  const num = x => Number(x) || 0;
+  const deposit = c.depositAuto + c.depositPending;
+  const release = num(L.release_money), fin = num(L.finance_income), finComm = num(L.finance_commission);
+  const totalIn = deposit + release + fin + finComm;
+  const pledgeReturn = c.pledge + c.adjust + c.interest;
+  const brokerSell = num(L.broker_sell_fee);
+  return { code, deposit, release, fin, finComm, totalIn, pledge: c.pledge, adjust: c.adjust, interest: c.interest, days: c.days, pledgeReturn, brokerSell, net: totalIn - pledgeReturn - brokerSell, hasPrice: c.hasPrice };
+}
+function r2DivLines(d) {
+  const m = x => r2M(Math.round(x * 100) / 100);
+  const L = [
+    ['รหัสรถ', d.code + (r1Title(d.code) ? ' — ' + r1Title(d.code) : '')],
+    ['รับเงินจอง', m(d.deposit)],
+    ['รับเงินปล่อยรถ', m(d.release)],
+    ['รับเงินไฟแนนซ์', m(d.fin)],
+    ['รับค่าคอมไฟแนนซ์', m(d.finComm)],
+    ['ยอดรวมรับเงิน', m(d.totalIn)],
+    ['คืนจำนำ', m(d.pledgeReturn)],
+    ['ค่านายหน้าขาย', m(d.brokerSell)],
+    ['ยอดที่โอนคืนกองกลาง', m(d.net)],
+  ];
+  return L;
+}
+let r2DivCode = null;
+function r2DivOpen(code, fromForm) {
+  if (!isAdmin()) return;
+  r2DivCode = code;
+  const Lo = fromForm && r2LedgerCode === code ? r2LedgerCollect(false).L : null;
+  const d = r2DivCompute(code, Lo);
+  const m = x => r2M(Math.round(x * 100) / 100);
+  const row = (l, v, cls, sub) => `<div class="r2-sum-row${cls ? ' ' + cls : ''}"><span>${l}${sub ? '<div class="muted" style="font-size:12px;">' + sub + '</div>' : ''}</span><span class="num">${v}</span></div>`;
+  let h = '';
+  if (!d.hasPrice) h += '<div class="r2-warn">ยังไม่มีราคาซื้อ — ยอดคืนจำนำยังไม่ครบ</div>';
+  h += '<div class="r2-sum">' +
+    row('1. รหัสรถ', escapeHtml(d.code)) +
+    row('2. รับเงินจอง', m(d.deposit)) +
+    row('3. รับเงินปล่อยรถ', m(d.release)) +
+    row('4. รับเงินไฟแนนซ์', m(d.fin)) +
+    row('5. รับค่าคอมไฟแนนซ์', m(d.finComm)) +
+    row('6. ยอดรวมรับเงิน (ข้อ 2–5)', m(d.totalIn), 'total') +
+    row('7. คืนจำนำ', m(d.pledgeReturn), '', 'ยอดจำนำ ' + m(d.pledge) + (d.adjust ? ' ' + (d.adjust > 0 ? '+' : '−') + ' ขาด/เกิน ' + m(Math.abs(d.adjust)) : '') + ' + ดอกเบี้ย ' + m(d.interest) + (d.days != null ? ' (' + d.days + ' วัน)' : '')) +
+    row('8. ค่านายหน้าขาย', m(d.brokerSell)) +
+    row('9. ยอดที่โอนคืนกองกลาง (ข้อ 6 − 7 − 8)', `<span class="${d.net >= 0 ? 'r2-pos' : 'r2-neg'}">${m(d.net)} บาท</span>`, 'total') +
+    '</div>';
+  document.getElementById('r2DivBody').innerHTML = h;
+  document.getElementById('r2DivOverlay').classList.add('open');
+}
+function r2DivClose() { document.getElementById('r2DivOverlay').classList.remove('open'); }
+async function r2DivCopy() {
+  if (!r2DivCode) return;
+  const Lo = r2LedgerCode === r2DivCode ? r2LedgerCollect(false).L : null;
+  const d = r2DivCompute(r2DivCode, Lo);
+  const text = 'ยอดปันผล\n' + r2DivLines(d).map(([l, v], i) => (i + 1) + '. ' + l + ': ' + v).join('\n');
+  try {
+    if (navigator.clipboard && window.isSecureContext) await navigator.clipboard.writeText(text);
+    else { const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); }
+    showToast('คัดลอกยอดปันผลแล้ว');
+  } catch (e) { showToast('คัดลอกไม่สำเร็จ', true); }
+}
+
+function r2AcctSummaryHtml(c) {
+  const names = R2_ACCOUNTS.concat(['ไม่ระบุ']).filter(a => c.byAcct[a] && (c.byAcct[a].out || c.byAcct[a].in));
+  if (!names.length) return '';
+  return '<div class="r2-acct-sum"><div class="r2-acct-sum-h">แยกตามบัญชีเงิน</div>' +
+    names.map(a => { const b = c.byAcct[a]; return `<div class="r2-sum-row"><span>${a}</span><span class="num">รายจ่าย ${r2M(b.out)} · รายรับ ${r2M(b.in)}</span></div>`; }).join('') + '</div>';
 }
 
 function r2LedgerCollect(strict) {
@@ -4842,9 +5032,11 @@ function r2LedgerCollect(strict) {
     wash_fee: r1Num(g('wash_fee')),
     transfer_actual: has('transfer_actual') ? r1Num(g('transfer_actual')) : (old.transfer_actual == null ? null : old.transfer_actual),
     transfer_status: has('transfer_status') ? g('transfer_status') : (old.transfer_status || null),
+    accounts: r2ReadAccounts(old),
     other_expenses: r2ReadRows('r2l_otherExp'),
     release_money: r1Num(g('release_money')),
     finance_income: r1Num(g('finance_income')),
+    finance_commission: r1Num(g('finance_commission')),
     forfeited_deposit: r1Num(g('forfeited_deposit')),
     other_income: r2ReadRows('r2l_otherInc'),
     note: (g('note') || '').trim() || null,
@@ -4868,11 +5060,12 @@ function r2LedgerPreview() {
   sum.innerHTML =
     row('ยอดจำนำ', r2M(c.pledge)) +
     row('จำนำขาด/เกิน', c.adjust ? signed(c.adjust) : '—') +
-    row('ดอกเบี้ย 0.5%/วัน × ' + (c.days == null ? '—' : c.days) + ' วัน' + (c.returned ? ' (ถึงวันคืนจำนำ)' : ' (ถึงวันนี้)'), r2M(c.interest)) +
-    row('ค่าใช้จ่ายส่วนอื่น (ดูรถ/คอมนายหน้า/ล้าง/คอมเซลล์/อื่น ๆ)', r2M(c.rest)) +
+    row('ดอกเบี้ย 0.5%/เดือน (' + (c.days == null ? '—' : c.days) + ' วัน)' + (c.returned ? ' (ถึงวันคืนจำนำ)' : ' (ถึงวันนี้)'), r2M(c.interest)) +
+    row('ค่าใช้จ่ายส่วนอื่น (คอมซื้อ/คอมนายหน้า/ล้าง/คอมเซลล์/อื่น ๆ)', r2M(c.rest)) +
     row('ต้นทุน ณ ปัจจุบัน', r2M(c.cost) + ' บาท', 'total') +
     row('รายรับรวม', r2M(c.income) + ' บาท') +
-    row('กำไร / ขาดทุน (รายรับ − ต้นทุน)', `<span class="${c.profit >= 0 ? 'r2-pos' : 'r2-neg'}">${c.profit >= 0 ? '+' : ''}${r2M(c.profit)} บาท</span>`, 'total');
+    row('กำไร / ขาดทุน (รายรับ − ต้นทุน)', `<span class="${c.profit >= 0 ? 'r2-pos' : 'r2-neg'}">${c.profit >= 0 ? '+' : ''}${r2M(c.profit)} บาท</span>`, 'total') +
+    r2AcctSummaryHtml(c);
 }
 
 async function r2LedgerSave() {
