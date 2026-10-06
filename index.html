@@ -355,6 +355,22 @@
   .r1-row3 { grid-template-columns: 1fr 1fr 1fr; }
   @media (max-width: 820px) { .r1-row3 { grid-template-columns: 1fr; } }
 
+  /* ---------- รอบ 2: ใบจอง / ใบส่งมอบ / ค่าคอม / บัญชีต่อคัน ---------- */
+  .r2-row { display: grid; grid-template-columns: 1fr 140px 30px; gap: 8px; margin-bottom: 8px; align-items: center; }
+  .r2-row input { width: 100%; padding: 9px 11px; border-radius: 7px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); font-family: var(--font-th); font-size: 14px; }
+  .r2-sum { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; }
+  .r2-sum-row { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; font-size: 13.5px; border-bottom: 1px solid var(--line-soft); }
+  .r2-sum-row:last-child { border-bottom: none; }
+  .r2-sum-row.total { font-weight: 700; font-size: 14.5px; }
+  .r2-sum-row .num { font-family: var(--font-code); font-weight: 600; white-space: nowrap; }
+  .r2-pos { color: var(--success); }
+  .r2-neg { color: var(--danger); }
+  .r2-flag { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 12px; background: var(--amber-bg); color: var(--amber); white-space: nowrap; }
+  .r2-warn { background: var(--amber-bg); color: var(--amber); border-radius: 7px; padding: 8px 11px; font-size: 12.5px; margin-bottom: 10px; }
+  .r2-info { font-size: 12.5px; color: var(--ink-soft); background: var(--paper); border: 1px solid var(--line); border-radius: 7px; padding: 9px 12px; margin-bottom: 14px; line-height: 1.6; }
+  .r2-static { padding: 9px 11px; border-radius: 7px; border: 1px dashed var(--line); background: var(--paper); font-size: 13.5px; }
+  .r2-add { margin-top: 2px; }
+
   .hidden { display: none !important; }
 
   @media (max-width: 820px) {
@@ -422,6 +438,9 @@
       <button class="nav-item hidden" id="usersNavItem" data-tab="users" onclick="switchTab('users')"><span class="dot"></span>จัดการผู้ใช้งาน</button>
       <button class="nav-item hidden" id="videosNavItem" data-tab="videos" onclick="switchTab('videos')"><span class="dot"></span>จัดการวิดีโอ</button>
       <button class="nav-item hidden" id="postplanNavItem" data-tab="postplan" onclick="switchTab('postplan')"><span class="dot"></span>แผนโพสรายสัปดาห์</button>
+      <button class="nav-item hidden" id="docsNavItem" data-tab="docs" onclick="switchTab('docs')"><span class="dot"></span>ใบจอง / ใบส่งมอบ</button>
+      <button class="nav-item hidden" id="commNavItem" data-tab="comm" onclick="switchTab('comm')"><span class="dot"></span>ค่าคอมเซลล์</button>
+      <button class="nav-item hidden" id="ledgerNavItem" data-tab="ledger" onclick="switchTab('ledger')"><span class="dot"></span>บัญชีต่อคัน</button>
       <button class="nav-sort-btn" id="navSortBtn" onclick="r1ToggleNavSort()">↕ จัดลำดับเมนู</button>
     </nav>
     <div class="who-pill">
@@ -800,6 +819,86 @@
       </div>
     </div>
 
+    <!-- DOCS TAB (ใบจอง / ใบส่งมอบ) -->
+    <div id="tab-docs" class="hidden">
+      <div class="topbar">
+        <div class="topbar-row">
+          <div>
+            <h2>ใบจอง / ใบส่งมอบ</h2>
+            <p class="sub">กรอกใบจองและใบส่งมอบของเคสที่ดูแล แล้วบันทึกเป็นรูปหรือคัดลอกข้อมูลส่งต่อได้</p>
+          </div>
+          <button class="btn btn-amber" id="r2AddBtn" onclick="openR2DocNew()">+ ใบจองใหม่</button>
+        </div>
+      </div>
+      <div class="content">
+        <div class="car-filter-bar" id="r2KindChips" style="margin-top:0;"></div>
+        <div class="filterbar" style="margin-top:14px;">
+          <div class="search-box">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M21 21l-4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            <input type="text" id="r2DocSearch" placeholder="ค้นหารหัสเคส, รหัสรถ, ชื่อลูกค้า, เบอร์, ทะเบียน…" oninput="renderR2Docs()">
+          </div>
+        </div>
+        <div class="table-wrap" id="r2DocTable"></div>
+      </div>
+    </div>
+
+    <!-- COMMISSION TAB (สเต็ป / ค่าคอมเซลล์) -->
+    <div id="tab-comm" class="hidden">
+      <div class="topbar">
+        <div class="topbar-row">
+          <div>
+            <h2>ค่าคอมเซลล์ / สเต็ป</h2>
+            <p class="sub">นับตามวันที่ออกรถในใบส่งมอบ — สเต็ปรวมถึงเกณฑ์ในเดือนเดียวกัน อัตราใหม่ใช้กับทุกคันของเดือนนั้น</p>
+          </div>
+          <button class="btn btn-ghost hidden" id="r2SettingsBtn" onclick="openR2Settings()">ตั้งค่าอัตราค่าคอม</button>
+        </div>
+      </div>
+      <div class="content">
+        <div class="month-bar">
+          <button class="icon-btn" title="เดือนก่อนหน้า" onclick="r2ChangeCommMonth(-1)">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <div class="month-label" id="r2CommMonthLabel">—</div>
+          <button class="icon-btn" id="r2CommNext" title="เดือนถัดไป" onclick="r2ChangeCommMonth(1)">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <button class="btn btn-ghost btn-sm hidden" id="r2CommBack" onclick="r2CommNow()">กลับเดือนปัจจุบัน</button>
+          <div class="month-bar-spacer"></div>
+          <select class="filter-select hidden" id="r2CommSales" onchange="renderR2Comm()">
+            <option value="">เซลล์ทั้งหมด</option>
+          </select>
+        </div>
+        <div id="r2CommSummary"></div>
+        <div class="table-wrap" id="r2CommTable"></div>
+      </div>
+    </div>
+
+    <!-- LEDGER TAB (บัญชีต่อคัน — แอดมิน) -->
+    <div id="tab-ledger" class="hidden">
+      <div class="topbar">
+        <div class="topbar-row">
+          <div>
+            <h2>บัญชีต่อคัน</h2>
+            <p class="sub" id="r2LedgerSub">รายจ่าย รายรับ และต้นทุน ณ ปัจจุบันของรถแต่ละคัน</p>
+          </div>
+        </div>
+      </div>
+      <div class="content">
+        <div class="filterbar">
+          <div class="search-box">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M21 21l-4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            <input type="text" id="r2LedgerSearch" placeholder="ค้นหารหัสรถ, รุ่น, ทะเบียน…" oninput="r2RenderLedger()">
+          </div>
+          <select class="filter-select" id="r2LedgerFilter" onchange="r2RenderLedger()">
+            <option value="instock">รถที่ยังไม่ขาย</option>
+            <option value="sold">รถขายแล้ว</option>
+            <option value="all">ทั้งหมด</option>
+          </select>
+        </div>
+        <div class="table-wrap" id="r2LedgerBody"></div>
+      </div>
+    </div>
+
   </main>
 </div>
 
@@ -1090,6 +1189,84 @@
   </div>
 </div>
 
+<datalist id="r2CaseList"></datalist>
+<datalist id="r2FinList"></datalist>
+
+<!-- ใบจอง / ใบส่งมอบ (ลิ้นชัก) -->
+<div class="overlay" id="r2DocOverlay">
+  <div class="drawer" style="width:min(560px,100%);">
+    <div class="drawer-head">
+      <h3 id="r2DocTitle">ใบจอง</h3>
+      <button class="drawer-close" onclick="closeR2Doc()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="drawer-body" id="r2DocBody"></div>
+    <div class="drawer-foot" style="flex-wrap:wrap;">
+      <button class="btn btn-primary" style="flex:1; min-width:120px;" id="r2SaveBtn" onclick="r2SaveDoc()">บันทึก</button>
+      <button class="btn btn-ghost" onclick="r2SlipImage()">บันทึกเป็นรูป</button>
+      <button class="btn btn-ghost" onclick="r2SlipCopy()">คัดลอกข้อมูล</button>
+      <button class="btn btn-ghost" onclick="closeR2Doc()">ปิด</button>
+    </div>
+  </div>
+</div>
+
+<!-- บัญชีต่อคัน (ลิ้นชัก — แอดมิน) -->
+<div class="overlay" id="r2LedgerOverlay">
+  <div class="drawer" style="width:min(580px,100%);">
+    <div class="drawer-head">
+      <h3 id="r2LedgerTitle">บัญชีต่อคัน</h3>
+      <button class="drawer-close" onclick="r2LedgerClose()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="drawer-body" id="r2LedgerForm"></div>
+    <div class="drawer-foot">
+      <button class="btn btn-primary" style="flex:1;" id="r2LedgerSaveBtn" onclick="r2LedgerSave()">บันทึกบัญชีคันนี้</button>
+      <button class="btn btn-ghost" onclick="r2LedgerClose()">ปิด</button>
+    </div>
+  </div>
+</div>
+
+<!-- แก้สเต็ปด้วยมือ (แอดมิน) -->
+<div class="overlay" id="r2StepOverlay" style="justify-content:center; align-items:center;" onclick="if(event.target===this) closeR2Step()">
+  <div class="drawer" style="width:min(420px,92%); height:auto; max-height:88vh; border-radius:12px;">
+    <div class="drawer-head">
+      <h3 id="r2StepTitle">แก้สเต็ป</h3>
+      <button class="drawer-close" onclick="closeR2Step()"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+    </div>
+    <div class="drawer-body">
+      <div class="r2-info" id="r2StepInfo"></div>
+      <div class="field"><label>สเต็ปที่ใช้จริง</label><input type="text" id="r2StepVal" inputmode="numeric" autocomplete="off" placeholder="เว้นว่าง = ใช้ค่าอัตโนมัติ"><div class="hint">ใส่เป็นจำนวนเต็ม เช่น 3 · เว้นว่างเพื่อกลับไปใช้ค่าอัตโนมัติ</div></div>
+      <div class="field"><label>หมายเหตุ (เหตุผลที่แก้)</label><input type="text" id="r2StepNote" autocomplete="off"></div>
+      <div style="display:flex; gap:10px; margin-top:8px;">
+        <button class="btn btn-primary" onclick="saveR2Step()">บันทึก</button>
+        <button class="btn btn-ghost" onclick="closeR2Step()">ยกเลิก</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ตั้งค่าอัตราค่าคอม (แอดมิน) -->
+<div class="overlay" id="r2SettingsOverlay" style="justify-content:center; align-items:center;" onclick="if(event.target===this) closeR2Settings()">
+  <div class="drawer" style="width:min(420px,92%); height:auto; max-height:88vh; border-radius:12px;">
+    <div class="drawer-head">
+      <h3>ตั้งค่าอัตราค่าคอม</h3>
+      <button class="drawer-close" onclick="closeR2Settings()"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+    </div>
+    <div class="drawer-body">
+      <div class="field"><label>ค่าคอมต่อสเต็ป — อัตราปกติ (บาท)</label><input type="text" id="r2s_base" inputmode="decimal" autocomplete="off" oninput="r1MoneyInput(this)"></div>
+      <div class="field"><label>ค่าคอมต่อสเต็ป — อัตราเมื่อถึงเกณฑ์ (บาท)</label><input type="text" id="r2s_bonus" inputmode="decimal" autocomplete="off" oninput="r1MoneyInput(this)"></div>
+      <div class="field"><label>เกณฑ์สเต็ปรวมในเดือน (ถึงหรือเกินเกณฑ์ได้อัตราสูง)</label><input type="text" id="r2s_threshold" inputmode="numeric" autocomplete="off"></div>
+      <div class="field"><label>ราคาตั้งขายตั้งแต่ (บาท) นับเป็นกลุ่มราคาสูง</label><input type="text" id="r2s_price" inputmode="decimal" autocomplete="off" oninput="r1MoneyInput(this)"><div class="hint">กลุ่มราคาสูง: ปิดเต็ม 4 สเต็ป / ไม่เต็ม 2 สเต็ป · ต่ำกว่านี้: ปิดเต็ม 2 / ไม่เต็ม 1</div></div>
+      <div style="display:flex; gap:10px; margin-top:8px;">
+        <button class="btn btn-primary" onclick="saveR2Settings()">บันทึก</button>
+        <button class="btn btn-ghost" onclick="closeR2Settings()">ยกเลิก</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="toast-wrap" id="toastWrap"></div>
 
 <script>
@@ -1350,6 +1527,7 @@ function enterApp() {
   }
   setConn('ok', 'เชื่อมต่อแล้ว');
   setupRound1Nav();
+  setupRound2Nav();
   if (isEditor()) {
     switchTab('videos');
   } else if (isRegistry()) {
@@ -1359,12 +1537,14 @@ function enterApp() {
     subscribeBrokers();
   }
   subscribeRound1();
+  subscribeRound2();
   subscribeCars(); // ต้องใช้รหัสรถทั้งฝั่งเคสและฝั่งแผนโพส
   if (canManageVideos()) { subscribeVideos(); subscribeWeeklyPosts(); }
   if (isAdmin()) subscribeUsers();
   setInterval(() => {
     if (!isEditor() && !isRegistry()) { reloadCases(); reloadBrokers(); }
     reloadRound1();
+    reloadRound2();
     reloadCars();
     if (canManageVideos()) { reloadVideos(); reloadWeeklyPosts(); }
     if (isAdmin()) reloadUsers();
@@ -1499,8 +1679,14 @@ function switchTab(tab) {
   document.getElementById('tab-postplan').classList.toggle('hidden', tab !== 'postplan');
   document.getElementById('tab-stock').classList.toggle('hidden', tab !== 'stock');
   document.getElementById('tab-registry').classList.toggle('hidden', tab !== 'registry');
+  document.getElementById('tab-docs').classList.toggle('hidden', tab !== 'docs');
+  document.getElementById('tab-comm').classList.toggle('hidden', tab !== 'comm');
+  document.getElementById('tab-ledger').classList.toggle('hidden', tab !== 'ledger');
   if (tab === 'stock') renderStock();
   if (tab === 'registry') renderRegistry();
+  if (tab === 'docs') renderR2Docs();
+  if (tab === 'comm') renderR2Comm();
+  if (tab === 'ledger') r2RenderLedger();
 }
 
 /* ---------------- Data scoping ---------------- */
@@ -2935,6 +3121,8 @@ function r1CurStockMonth() { if (!r1StockMonthKey) r1StockMonthKey = currentMont
 function r1SoldMonthKey(code) {
   const d = carDetails[code], c = r1Car(code);
   if (d && d.sold_date) return String(d.sold_date).slice(0, 7);
+  const r2dv = (typeof r2DeliveryByCar === 'function') ? r2DeliveryByCar(code) : null;
+  if (r2dv && r2dv.delivery_date) return String(r2dv.delivery_date).slice(0, 7);
   if (c && c.soldCaseId) {
     const cs = cases.find(x => x.id === c.soldCaseId);
     if (cs && cs.closedAt) return monthKeyOf(cs.closedAt);
@@ -3037,6 +3225,7 @@ async function reloadCarPrivate() {
     if (error) throw error;
     carPrivate = {};
     data.forEach(r => { carPrivate[r.car_code] = r; });
+    r2RenderLedger();
   } catch (e) { r1Err('โหลดข้อมูลราคาซื้อไม่สำเร็จ: ', e); }
 }
 async function reloadRegistryNotes() {
@@ -3121,6 +3310,9 @@ function r1RenderAll() {
   renderStock();
   renderRegistry();
   r1RenderAlerts();
+  renderR2Docs();
+  renderR2Comm();
+  r2RenderLedger();
 }
 
 /* ---------- alert strip (หน้าเคส — แอดมิน) ---------- */
@@ -3695,6 +3887,1014 @@ function askDeleteNote(id) {
     } catch (e) { showToast('ลบไม่สำเร็จ: ' + e.message, true); }
   });
 }
+
+/* =================================================================
+   รอบ 2 — ใบจอง / ใบส่งมอบ / ค่าคอมเซลล์ / บัญชีต่อคัน
+   ================================================================= */
+const R2_INTEREST_PER_DAY = 0.005;   // ดอกเบี้ยจำนำ 0.5%/วัน ไม่ทบต้น คิดจากยอดจำนำอย่างเดียว
+const R2_DEFAULTS = { comm_step_base: 5000, comm_step_bonus: 7000, comm_bonus_threshold: 6, comm_price_threshold: 1990000 };
+const R2_DELIV_MIN = 'case_id,case_code,car_code,sales_username,delivery_date';   // ฝ่ายทะเบียนโหลดเท่านี้ (ไม่เห็นราคา/ลูกค้า)
+const R2_BROKER_CHANNELS = ['นายหน้า', 'น้ำ', 'บี'];
+
+let r2Bookings = {};     // case_id -> แถวจาก car_bookings
+let r2Deliveries = {};   // case_id -> แถวจาก car_deliveries
+let r2Ledger = {};       // code -> แถวจาก car_ledger (แอดมินเท่านั้น)
+let r2Settings = Object.assign({}, R2_DEFAULTS);
+let r2ErrShown = false;
+let r2Kind = 'booking';  // แท็บที่เปิดอยู่ในหน้าใบจอง/ใบส่งมอบ
+let r2DocKind = null;    // ชนิดของฟอร์มที่เปิดอยู่
+let r2DocCaseId = null;
+let r2DocIsNew = true;
+let r2CommMonth = null;
+let r2StepCaseId = null;
+let r2LedgerCode = null;
+
+function isSales() { return !!session && session.role === 'sales'; }
+function r2CanDocs() { return isAdmin() || isSales(); }
+function r2Err(prefix, e) {
+  if (r2ErrShown) return;
+  r2ErrShown = true;
+  showToast(prefix + e.message + ' (ตรวจสอบว่ารัน round2_setup.sql แล้ว)', true);
+}
+/* แสดงจำนวนเงิน: จำนวนเต็มไม่มีทศนิยม ถ้ามีเศษแสดง 2 ตำแหน่ง */
+function r2M(n) {
+  if (n == null || n === '' || isNaN(Number(n))) return '—';
+  const x = Math.round(Number(n) * 100) / 100;
+  return Number.isInteger(x) ? x.toLocaleString('th-TH') : x.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function r2ParseIso(s) {
+  if (!s) return null;
+  const p = String(s).slice(0, 10).split('-').map(Number);
+  if (p.length < 3 || p.some(isNaN)) return null;
+  return new Date(p[0], p[1] - 1, p[2]);
+}
+function r2DaysBetween(a, b) {
+  const da = r2ParseIso(a), db = r2ParseIso(b);
+  if (!da || !db) return null;
+  return Math.max(0, Math.round((db - da) / 86400000));
+}
+function r2ListSum(arr) { return (arr || []).reduce((s, x) => s + (Number(x.amount) || 0), 0); }
+
+/* ---------- ความสัมพันธ์เคส / เซลล์ ---------- */
+function r2CaseOf(rec) {
+  return cases.find(c => String(c.id) === String(rec.case_id)) || cases.find(c => c.caseCode && c.caseCode === rec.case_code) || null;
+}
+function r2CaseCodeOf(rec) { const c = r2CaseOf(rec); return c ? c.caseCode : (rec.case_code || '—'); }
+function r2SalesOf(rec) { const c = r2CaseOf(rec); return rec.sales_username || (c && c.salesPerson) || ''; }
+function r2Own(rec) { return isAdmin() || (!!session && r2SalesOf(rec) === session.username); }
+function r2CaseChoices() {
+  return (isAdmin() ? cases : cases.filter(c => c.salesPerson === session.username))
+    .slice().sort((a, b) => (a.caseCode || '').localeCompare(b.caseCode || '', undefined, { numeric: true, sensitivity: 'base' }));
+}
+function r2DeliveryByCar(code) {
+  let best = null;
+  Object.values(r2Deliveries).forEach(dv => {
+    if (dv.car_code !== code) return;
+    if (!best || String(dv.delivery_date || '') > String(best.delivery_date || '')) best = dv;
+  });
+  return best;
+}
+
+/* ---------- โหลดข้อมูล + realtime ---------- */
+async function reloadR2Bookings() {
+  if (!r2CanDocs()) return;
+  try {
+    const { data, error } = await sb.from('car_bookings').select('*');
+    if (error) throw error;
+    r2Bookings = {};
+    data.forEach(r => { r2Bookings[r.case_id] = r; });
+    r2RenderAll();
+  } catch (e) { r2Err('โหลดใบจองไม่สำเร็จ: ', e); }
+}
+async function reloadR2Deliveries() {
+  if (isEditor()) return;
+  try {
+    const { data, error } = await sb.from('car_deliveries').select(r2CanDocs() ? '*' : R2_DELIV_MIN);
+    if (error) throw error;
+    r2Deliveries = {};
+    data.forEach(r => { r2Deliveries[r.case_id] = r; });
+    r2RenderAll();
+  } catch (e) { r2Err('โหลดใบส่งมอบไม่สำเร็จ: ', e); }
+}
+async function reloadR2Ledger() {
+  if (!isAdmin()) return;
+  try {
+    const { data, error } = await sb.from('car_ledger').select('*');
+    if (error) throw error;
+    r2Ledger = {};
+    data.forEach(r => { r2Ledger[r.code] = r; });
+    r2RenderAll();
+  } catch (e) { r2Err('โหลดบัญชีต่อคันไม่สำเร็จ: ', e); }
+}
+async function reloadR2Settings() {
+  if (!r2CanDocs()) return;
+  try {
+    const { data, error } = await sb.from('r2_settings').select('*');
+    if (error) throw error;
+    const s = Object.assign({}, R2_DEFAULTS);
+    data.forEach(r => { const n = Number(r.value); if (Object.prototype.hasOwnProperty.call(R2_DEFAULTS, r.key) && !isNaN(n)) s[r.key] = n; });
+    r2Settings = s;
+    r2RenderAll();
+  } catch (e) { r2Err('โหลดค่าตั้งค่าคอมไม่สำเร็จ: ', e); }
+}
+function reloadRound2() { reloadR2Bookings(); reloadR2Deliveries(); reloadR2Ledger(); reloadR2Settings(); }
+function subscribeRound2() {
+  if (isEditor()) return;
+  reloadRound2();
+  sb.channel('car-deliveries-rt').on('postgres_changes', { event: '*', schema: 'public', table: 'car_deliveries' }, () => reloadR2Deliveries()).subscribe();
+  if (r2CanDocs()) {
+    sb.channel('car-bookings-rt').on('postgres_changes', { event: '*', schema: 'public', table: 'car_bookings' }, () => reloadR2Bookings()).subscribe();
+    sb.channel('r2-settings-rt').on('postgres_changes', { event: '*', schema: 'public', table: 'r2_settings' }, () => reloadR2Settings()).subscribe();
+  }
+  if (isAdmin()) sb.channel('car-ledger-rt').on('postgres_changes', { event: '*', schema: 'public', table: 'car_ledger' }, () => reloadR2Ledger()).subscribe();
+}
+function setupRound2Nav() {
+  if (r2CanDocs()) {
+    document.getElementById('docsNavItem').classList.remove('hidden');
+    document.getElementById('commNavItem').classList.remove('hidden');
+  }
+  if (isAdmin()) {
+    document.getElementById('ledgerNavItem').classList.remove('hidden');
+    document.getElementById('r2SettingsBtn').classList.remove('hidden');
+    document.getElementById('r2CommSales').classList.remove('hidden');
+  }
+}
+function r2RenderAll() {
+  renderR2Docs();
+  renderR2Comm();
+  r2RenderLedger();
+  renderStock();   // เดือนของรถที่ขายแล้วอ้างอิงวันที่ออกรถในใบส่งมอบ
+}
+
+/* ---------- สเต็ป + ค่าคอม ---------- */
+/* ปิดเต็ม = ราคาที่ขายไป >= ราคาตั้งขาย (ค่าจัดโอนแถมยังถือว่าเต็ม) */
+function r2AutoSteps(listPrice, soldPrice) {
+  const lp = Number(listPrice), sp = Number(soldPrice);
+  if (!(lp > 0) || !(sp > 0)) return null;
+  const high = lp >= r2Settings.comm_price_threshold;
+  const full = sp >= lp;
+  return { steps: high ? (full ? 4 : 2) : (full ? 2 : 1), full, high };
+}
+function r2StepsOf(dv) {
+  const auto = r2AutoSteps(dv.list_price, dv.sold_price);
+  const ov = dv.steps_override;
+  const manual = ov != null && ov !== '';
+  return { auto: auto ? auto.steps : null, full: auto ? auto.full : null, manual, steps: manual ? Number(ov) : (auto ? auto.steps : 0) };
+}
+function r2MonthSteps(username, mk) {
+  let t = 0;
+  Object.values(r2Deliveries).forEach(dv => {
+    if (r2SalesOf(dv) === username && dv.delivery_date && String(dv.delivery_date).slice(0, 7) === mk) t += r2StepsOf(dv).steps;
+  });
+  return t;
+}
+function r2Rate(totalSteps) { return totalSteps >= r2Settings.comm_bonus_threshold ? r2Settings.comm_step_bonus : r2Settings.comm_step_base; }
+function r2Commission(dv) {
+  const s = r2StepsOf(dv);
+  const mk = String(dv.delivery_date || '').slice(0, 7);
+  const monthSteps = r2MonthSteps(r2SalesOf(dv), mk);
+  const rate = r2Rate(monthSteps);
+  return { steps: s.steps, auto: s.auto, full: s.full, manual: s.manual, monthSteps, rate, amount: s.steps * rate };
+}
+
+function r2OpenSettingsFill() {
+  document.getElementById('r2s_base').value = r1MoneyShown(r2Settings.comm_step_base);
+  document.getElementById('r2s_bonus').value = r1MoneyShown(r2Settings.comm_step_bonus);
+  document.getElementById('r2s_threshold').value = String(r2Settings.comm_bonus_threshold);
+  document.getElementById('r2s_price').value = r1MoneyShown(r2Settings.comm_price_threshold);
+}
+function openR2Settings() { if (!isAdmin()) return; r2OpenSettingsFill(); document.getElementById('r2SettingsOverlay').classList.add('open'); }
+function closeR2Settings() { document.getElementById('r2SettingsOverlay').classList.remove('open'); }
+async function saveR2Settings() {
+  if (!isAdmin()) return;
+  const v = {
+    comm_step_base: r1Num(document.getElementById('r2s_base').value),
+    comm_step_bonus: r1Num(document.getElementById('r2s_bonus').value),
+    comm_bonus_threshold: r1Num(document.getElementById('r2s_threshold').value),
+    comm_price_threshold: r1Num(document.getElementById('r2s_price').value),
+  };
+  if (Object.values(v).some(x => x == null || x < 0) || v.comm_bonus_threshold < 1) { showToast('กรุณากรอกตัวเลขให้ครบและถูกต้อง', true); return; }
+  try {
+    const now = Date.now();
+    const rows = Object.keys(v).map(k => ({ key: k, value: String(v[k]), updated_at: now }));
+    const { error } = await sb.from('r2_settings').upsert(rows, { onConflict: 'key' });
+    if (error) throw error;
+    r2Settings = Object.assign({}, r2Settings, v);
+    showToast('บันทึกอัตราค่าคอมแล้ว');
+    closeR2Settings();
+    r2RenderAll();
+  } catch (e) { showToast('บันทึกไม่สำเร็จ: ' + e.message, true); }
+}
+
+/* ---------- หน้าค่าคอมเซลล์ ---------- */
+function r2CurCommMonth() { if (!r2CommMonth) r2CommMonth = currentMonthKey(); return r2CommMonth; }
+function r2ChangeCommMonth(delta) {
+  const next = shiftMonthKey(r2CurCommMonth(), delta);
+  if (next > currentMonthKey()) return;
+  r2CommMonth = next;
+  renderR2Comm();
+}
+function r2CommNow() { r2CommMonth = currentMonthKey(); renderR2Comm(); }
+
+function renderR2Comm() {
+  const tbl = document.getElementById('r2CommTable');
+  if (!tbl || !r2CanDocs()) return;
+  const mk = r2CurCommMonth();
+  const isCur = mk === currentMonthKey();
+  document.getElementById('r2CommMonthLabel').textContent = monthKeyLabel(mk);
+  document.getElementById('r2CommNext').disabled = isCur;
+  document.getElementById('r2CommBack').classList.toggle('hidden', isCur);
+
+  if (isAdmin()) {
+    const sel = document.getElementById('r2CommSales');
+    const prev = sel.value;
+    const users = appUsers.filter(u => u.role === 'sales');
+    sel.innerHTML = '<option value="">เซลล์ทั้งหมด</option>' + users.map(u => `<option value="${escapeHtml(u.username)}">${escapeHtml(u.displayName)}</option>`).join('');
+    sel.value = users.some(u => u.username === prev) ? prev : '';
+  }
+  const salesF = isAdmin() ? document.getElementById('r2CommSales').value : '';
+  const list = Object.values(r2Deliveries).filter(dv =>
+    r2Own(dv) && dv.delivery_date && String(dv.delivery_date).slice(0, 7) === mk && (!salesF || r2SalesOf(dv) === salesF));
+  list.sort((a, b) => String(a.delivery_date).localeCompare(String(b.delivery_date)) || r2CaseCodeOf(a).localeCompare(r2CaseCodeOf(b), undefined, { numeric: true }));
+
+  const bySales = {};
+  list.forEach(dv => { const u = r2SalesOf(dv); (bySales[u] = bySales[u] || []).push(dv); });
+  const sumEl = document.getElementById('r2CommSummary');
+  const names = Object.keys(bySales);
+  sumEl.innerHTML = names.length ? names.map(u => {
+    const steps = r2MonthSteps(u, mk);
+    const rate = r2Rate(steps);
+    const total = bySales[u].reduce((s, dv) => s + r2Commission(dv).amount, 0);
+    const need = r2Settings.comm_bonus_threshold - steps;
+    const hint = need > 0 ? `<div class="muted" style="margin-top:2px;">อีก ${need} สเต็ป จะได้ ${r2M(r2Settings.comm_step_bonus)} บาท/สเต็ป กับทุกคันของเดือนนี้</div>`
+      : `<div class="muted" style="margin-top:2px;">ถึงเกณฑ์ ${r2Settings.comm_bonus_threshold} สเต็ปแล้ว — ใช้อัตราสูงกับทุกคันของเดือนนี้</div>`;
+    return `<div class="r1-row">
+      <div class="main"><b>${escapeHtml(salesDisplayName(u))}</b> · ${bySales[u].length} คัน${hint}</div>
+      <div class="meta"><span>สเต็ปรวม <b>${steps}</b></span><span>อัตรา <b>${r2M(rate)}</b>/สเต็ป</span><span>ค่าคอมรวม <b>${r2M(total)}</b> บาท</span></div>
+    </div>`;
+  }).join('') : '';
+
+  if (!list.length) { tbl.innerHTML = '<div class="empty-state"><div class="big">ไม่มีรถที่ออกในเดือนนี้</div><div>ค่าคอมนับจากวันที่ออกรถในใบส่งมอบ</div></div>'; return; }
+  const admin = isAdmin();
+  tbl.innerHTML = `<table><thead><tr>
+    <th>วันที่ออกรถ</th>${admin ? '<th>เซลล์</th>' : ''}<th>เคส</th><th>รถ</th><th>ราคาตั้งขาย</th><th>ราคาที่ขายไป</th><th>ปิด</th><th>สเต็ปอัตโนมัติ</th><th>สเต็ปที่ใช้</th><th>ค่าคอม</th>${admin ? '<th></th>' : ''}
+  </tr></thead><tbody>` + list.map(dv => {
+    const cm = r2Commission(dv);
+    const closeBadge = cm.full === null ? '<span class="r2-flag">ราคาไม่ครบ</span>'
+      : cm.full ? '<span class="badge" style="background:#157F3C18; color:#157F3C;"><span class="dot"></span>ปิดเต็ม</span>'
+        : '<span class="badge" style="background:#C97F0018; color:#C97F00;"><span class="dot"></span>ไม่เต็ม</span>';
+    const note = dv.steps_note ? `<div class="muted">${escapeHtml(dv.steps_note)}</div>` : '';
+    return `<tr style="cursor:default;">
+      <td class="muted">${fmtDate(dv.delivery_date)}</td>
+      ${admin ? `<td><span class="sales-tag">${escapeHtml(salesDisplayName(r2SalesOf(dv)))}</span></td>` : ''}
+      <td><span class="case-code">${escapeHtml(r2CaseCodeOf(dv))}</span></td>
+      <td><span class="code-badge">${escapeHtml(dv.car_code || '—')}</span><span class="model-txt">${escapeHtml(r1Title(dv.car_code))}</span></td>
+      <td>${r2M(dv.list_price)}</td><td>${r2M(dv.sold_price)}</td>
+      <td>${closeBadge}</td>
+      <td>${cm.auto == null ? '—' : cm.auto}</td>
+      <td><b>${cm.steps}</b>${cm.manual ? ' <span class="r2-flag">แก้ด้วยมือ</span>' : ''}${note}</td>
+      <td><b>${r2M(cm.amount)}</b><div class="muted">${cm.steps} × ${r2M(cm.rate)}</div></td>
+      ${admin ? `<td><button class="icon-btn" title="แก้สเต็ป" data-id="${escapeHtml(String(dv.case_id))}" onclick="openR2Step(this.dataset.id)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 20h9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></button></td>` : ''}
+    </tr>`;
+  }).join('') + '</tbody></table>';
+}
+
+function openR2Step(caseId) {
+  if (!isAdmin()) return;
+  const dv = r2Deliveries[caseId];
+  if (!dv) return;
+  r2StepCaseId = caseId;
+  const s = r2StepsOf(dv);
+  document.getElementById('r2StepTitle').textContent = 'แก้สเต็ป · ' + r2CaseCodeOf(dv);
+  document.getElementById('r2StepInfo').textContent = 'ราคาตั้งขาย ' + r2M(dv.list_price) + ' · ขายไป ' + r2M(dv.sold_price) + ' → สเต็ปอัตโนมัติ ' + (s.auto == null ? '— (ราคาไม่ครบ)' : s.auto);
+  document.getElementById('r2StepVal').value = s.manual ? String(dv.steps_override) : '';
+  document.getElementById('r2StepNote').value = dv.steps_note || '';
+  document.getElementById('r2StepOverlay').classList.add('open');
+}
+function closeR2Step() { document.getElementById('r2StepOverlay').classList.remove('open'); r2StepCaseId = null; }
+async function saveR2Step() {
+  if (!isAdmin() || !r2StepCaseId) return;
+  const raw = document.getElementById('r2StepVal').value.trim();
+  let val = null;
+  if (raw !== '') {
+    if (!/^\d+$/.test(raw)) { showToast('สเต็ปต้องเป็นจำนวนเต็ม', true); return; }
+    val = parseInt(raw, 10);
+  }
+  const note = document.getElementById('r2StepNote').value.trim() || null;
+  try {
+    const { error } = await sb.from('car_deliveries').update({ steps_override: val, steps_note: val == null ? null : note, updated_at: Date.now() }).eq('case_id', r2StepCaseId);
+    if (error) throw error;
+    showToast(val == null ? 'กลับไปใช้สเต็ปอัตโนมัติแล้ว' : 'บันทึกสเต็ปแล้ว');
+    closeR2Step();
+    reloadR2Deliveries();
+  } catch (e) { showToast('บันทึกไม่สำเร็จ: ' + e.message, true); }
+}
+
+/* ---------- หน้าใบจอง / ใบส่งมอบ ---------- */
+function r2SetKind(k) { r2Kind = k; renderR2Docs(); }
+function openR2DocNew() { openR2Doc(r2Kind, null); }
+function r2DeliverySummary(v) {
+  return (Number(v.down_payment) || 0) + (v.transfer_mode === 'ตัวเลข' ? (Number(v.transfer_fee) || 0) : 0) + (Number(v.insurance_fee) || 0) + (Number(v.other_fee) || 0);
+}
+function renderR2Docs() {
+  const wrap = document.getElementById('r2DocTable');
+  if (!wrap || !r2CanDocs()) return;
+  const bk = Object.values(r2Bookings).filter(r2Own);
+  const dv = Object.values(r2Deliveries).filter(r2Own);
+  document.getElementById('r2KindChips').innerHTML = [['booking', 'ใบจอง', bk.length], ['delivery', 'ใบส่งมอบ', dv.length]]
+    .map(([k, l, n]) => `<button class="car-filter-chip ${r2Kind === k ? 'active' : ''}" onclick="r2SetKind('${k}')">${l} (${n})</button>`).join('');
+  document.getElementById('r2AddBtn').textContent = r2Kind === 'booking' ? '+ ใบจองใหม่' : '+ ใบส่งมอบใหม่';
+  const kind = r2Kind;
+  const dateKey = kind === 'booking' ? 'booking_date' : 'delivery_date';
+  const search = (document.getElementById('r2DocSearch').value || '').trim().toLowerCase();
+  const list = (kind === 'booking' ? bk : dv).filter(rec => {
+    if (!search) return true;
+    return [r2CaseCodeOf(rec), rec.car_code, r1Title(rec.car_code), rec.customer_name, rec.customer_phone, rec.plate].join(' ').toLowerCase().includes(search);
+  });
+  list.sort((a, b) => String(b[dateKey] || '').localeCompare(String(a[dateKey] || '')));
+  const admin = isAdmin();
+  if (!list.length) {
+    wrap.innerHTML = `<div class="empty-state"><div class="big">ยังไม่มี${kind === 'booking' ? 'ใบจอง' : 'ใบส่งมอบ'}ในมุมมองนี้</div><div>กดปุ่ม "+ ${kind === 'booking' ? 'ใบจองใหม่' : 'ใบส่งมอบใหม่'}" ด้านบนเพื่อเริ่มกรอก</div></div>`;
+    return;
+  }
+  const trash = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2m2 0v14a1 1 0 01-1 1H7a1 1 0 01-1-1V6h12z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const head = kind === 'booking'
+    ? `<th>วันที่จอง</th><th>เคส</th><th>รถ</th><th>ลูกค้า</th>${admin ? '<th>เซลล์</th>' : ''}<th>ราคาที่ขายไป</th><th>เงินจอง</th><th>สถานะ</th><th></th>`
+    : `<th>วันที่ออกรถ</th><th>เคส</th><th>รถ</th><th>ลูกค้า</th>${admin ? '<th>เซลล์</th>' : ''}<th>ราคาที่ขายไป</th><th>ยอดใช้จ่ายวันออกรถ</th><th>ซื้อ</th><th></th>`;
+  wrap.innerHTML = `<table><thead><tr>${head}</tr></thead><tbody>` + list.map(rec => {
+    const id = escapeHtml(String(rec.case_id));
+    const common = `
+      <td><div class="case-code">${escapeHtml(r2CaseCodeOf(rec))}</div></td>
+      <td><span class="code-badge">${escapeHtml(rec.car_code || '—')}</span><span class="model-txt">${escapeHtml(r1Title(rec.car_code))}</span></td>
+      <td><div class="cust-name">${escapeHtml(rec.customer_name || '—')}</div><div class="cust-sub">${escapeHtml(rec.customer_phone || '')}</div></td>
+      ${admin ? `<td><span class="sales-tag">${escapeHtml(salesDisplayName(r2SalesOf(rec)))}</span></td>` : ''}
+      <td>${r2M(rec.sold_price)}</td>`;
+    const delBtn = admin ? `<button class="icon-btn danger" title="ลบ" data-id="${id}" onclick="r2AskDeleteDoc('${kind}', this.dataset.id)">${trash}</button>` : '';
+    if (kind === 'booking') {
+      const delivered = !!r2Deliveries[rec.case_id];
+      const badge = delivered
+        ? '<span class="badge" style="background:#157F3C18; color:#157F3C;"><span class="dot"></span>ออกรถแล้ว</span>'
+        : '<span class="badge" style="background:#C97F0018; color:#C97F00;"><span class="dot"></span>รอส่งมอบ</span>';
+      const mk = delivered ? '' : `<button class="btn btn-ghost btn-sm" data-id="${id}" onclick="openR2Doc('delivery', this.dataset.id)">ทำใบส่งมอบ</button>`;
+      return `<tr data-id="${id}" onclick="openR2Doc('booking', this.dataset.id)">
+        <td class="muted">${fmtDate(rec.booking_date)}</td>${common}
+        <td>${r2M(rec.deposit_amount)} <span class="muted">${escapeHtml(rec.deposit_method || '')}</span></td>
+        <td>${badge}</td>
+        <td onclick="event.stopPropagation()"><div class="row-actions">${mk}${delBtn}</div></td></tr>`;
+    }
+    const tm = rec.transfer_mode === 'ตามจริง' ? '<div class="muted">ไม่รวมค่าโอนตามจริง</div>' : '';
+    return `<tr data-id="${id}" onclick="openR2Doc('delivery', this.dataset.id)">
+      <td class="muted">${fmtDate(rec.delivery_date)}</td>${common}
+      <td><b>${r2M(r2DeliverySummary(rec))}</b>${tm}</td>
+      <td class="muted">${escapeHtml(rec.buy_type || '—')}${rec.finance_company ? ' · ' + escapeHtml(rec.finance_company) : ''}</td>
+      <td onclick="event.stopPropagation()"><div class="row-actions">${delBtn}</div></td></tr>`;
+  }).join('') + '</tbody></table>';
+}
+
+/* ---------- ฟอร์มใบจอง / ใบส่งมอบ ---------- */
+function r2Blank(kind) {
+  return { transfer_mode: 'แถม', buy_type: 'เงินสด', deposit_method: 'โอน', booking_date: kind === 'booking' ? r1TodayStr() : null, delivery_date: kind === 'delivery' ? r1TodayStr() : null };
+}
+function r2Prefill(kind, caseId) {
+  const c = cases.find(x => String(x.id) === String(caseId));
+  if (!c) return r2Blank(kind);
+  const d = carDetails[c.carCode] || {};
+  const v = Object.assign(r2Blank(kind), {
+    case_id: String(c.id), case_code: c.caseCode, car_code: c.carCode, sales_username: c.salesPerson,
+    mileage: d.mileage == null ? null : d.mileage,
+    plate: [d.plate, d.plate_province].filter(Boolean).join(' '),
+    list_price: d.sale_price == null ? null : d.sale_price,
+    channel: c.channel, broker_code: c.brokerCode || '',
+    customer_name: c.customerName, customer_phone: c.customerContact,
+  });
+  if (kind === 'delivery') {
+    const b = r2Bookings[String(c.id)];
+    if (b) ['booking_date', 'mileage', 'plate', 'list_price', 'sold_price', 'deposit_amount', 'transfer_mode', 'transfer_fee', 'buy_type', 'finance_company', 'channel', 'broker_code', 'customer_name', 'customer_phone']
+      .forEach(k => { if (b[k] != null && b[k] !== '') v[k] = b[k]; });
+  }
+  return v;
+}
+function openR2Doc(kind, caseId) {
+  if (!r2CanDocs()) return;
+  r2DocKind = kind;
+  const store = kind === 'booking' ? r2Bookings : r2Deliveries;
+  const existing = caseId ? store[String(caseId)] : null;
+  r2DocIsNew = !existing;
+  r2DocCaseId = caseId ? String(caseId) : null;
+  const v = existing ? Object.assign({}, existing) : (caseId ? r2Prefill(kind, caseId) : r2Blank(kind));
+  document.getElementById('r2DocTitle').textContent = (kind === 'booking' ? 'ใบจอง' : 'ใบส่งมอบ') + (existing ? ' · ' + r2CaseCodeOf(existing) : ' ใหม่');
+  r2RenderDocForm(v);
+  document.getElementById('r2DocOverlay').classList.add('open');
+}
+function closeR2Doc() { document.getElementById('r2DocOverlay').classList.remove('open'); r2DocKind = null; r2DocCaseId = null; }
+
+function r2RenderDocForm(v) {
+  const kind = r2DocKind, isNew = r2DocIsNew;
+  const hasBk = kind === 'delivery' && !!v.case_id && !!r2Bookings[v.case_id];
+  const F = (label, ctl, hint, wid) => `<div class="field"${wid ? ' id="' + wid + '"' : ''}><label>${label}</label>${ctl}${hint ? '<div class="hint">' + hint + '</div>' : ''}</div>`;
+  const T = (id, val, extra) => `<input type="text" id="r2d_${id}" value="${escapeHtml(val == null ? '' : val)}"${extra || ''}>`;
+  const M = (id, val, dis) => `<input type="text" id="r2d_${id}" inputmode="decimal" autocomplete="off" oninput="r1MoneyInput(this)" value="${escapeHtml(r1MoneyShown(val))}"${dis ? ' disabled' : ''}>`;
+  const D = (id, val) => `<input type="date" id="r2d_${id}" value="${escapeHtml(val ? String(val).slice(0, 10) : '')}">`;
+  const S = (id, opts, val) => `<select id="r2d_${id}">` + opts.map(o => `<option value="${escapeHtml(o)}"${o === val ? ' selected' : ''}>${escapeHtml(o)}</option>`).join('') + '</select>';
+  const R = (...c) => `<div class="field-row">${c.join('')}</div>`;
+
+  const chOpts = (v.channel && CHANNELS.indexOf(v.channel) === -1) ? CHANNELS.concat([v.channel]) : CHANNELS;
+  const caseCtl = isNew
+    ? `<input type="text" id="r2d_case" list="r2CaseList" autocomplete="off" placeholder="พิมพ์รหัสเคส เช่น C101" value="${escapeHtml(v.case_code || '')}" onchange="r2OnCaseChange()">`
+    : `<span class="static-pill">${escapeHtml(r2CaseCodeOf(v))}</span>`;
+  const carTxt = v.car_code ? escapeHtml(v.car_code) + (r1Title(v.car_code) ? ' — ' + escapeHtml(r1Title(v.car_code)) : '') : '— เลือกเคสก่อน —';
+  const carPill = F('รหัสรถ (ตามเคส)', `<span class="static-pill">${carTxt}</span>`);
+  const tmSel = `<select id="r2d_transfer_mode">` + [['แถม', 'แถม'], ['ตัวเลข', 'ระบุจำนวนเงิน'], ['ตามจริง', 'เก็บตามจริง']]
+    .map(([val, lbl]) => `<option value="${val}"${val === (v.transfer_mode || 'แถม') ? ' selected' : ''}>${lbl}</option>`).join('') + '</select>';
+
+  let h = '';
+  h += F('รหัสเคส', caseCtl, isNew ? 'พิมพ์หรือเลือกจากรายการ — เลือกแล้วระบบดึงข้อมูลรถและลูกค้ามาให้' : '');
+  if (kind === 'booking') {
+    h += R(F('วันที่จอง', D('booking_date', v.booking_date)), carPill);
+  } else {
+    h += R(F('วันที่จอง', D('booking_date', v.booking_date)), F('วันที่ออกรถ', D('delivery_date', v.delivery_date), 'ใช้ตัดสินว่านับค่าคอมเดือนไหน'));
+    h += carPill;
+  }
+  h += R(F('เลขไมล์ (กม.)', M('mileage', v.mileage)), F('ทะเบียน', T('plate', v.plate)));
+  h += R(F('ราคาที่ตั้งขาย (บาท)', M('list_price', v.list_price)), F('ราคาที่ขายไป (บาท)', M('sold_price', v.sold_price)));
+  if (kind === 'booking') {
+    h += R(F('เงินจอง (บาท)', M('deposit_amount', v.deposit_amount)), F('รับเงินจองโดย', S('deposit_method', ['โอน', 'เงินสด'], v.deposit_method || 'โอน')));
+  } else {
+    h += F('เงินจอง (บาท)', M('deposit_amount', v.deposit_amount, hasBk), hasBk ? 'ดึงมาจากใบจอง' : 'ไม่มีใบจอง — กรอกเองได้');
+  }
+  h += R(F('ซื้อ', S('buy_type', ['เงินสด', 'ไฟแนนซ์'], v.buy_type || 'เงินสด')), F('ไฟแนนซ์ที่จัด', T('finance_company', v.finance_company, ' list="r2FinList" autocomplete="off"'), 'พิมพ์ชื่อให้เหมือนเดิมทุกครั้ง', 'r2w_finco'));
+  if (kind === 'delivery') {
+    h += F('ยอดที่จัดไฟแนนซ์ (บาท)', M('finance_amount', v.finance_amount), '', 'r2w_finamt');
+    h += F('เงินดาวน์ (บาท)', M('down_payment', v.down_payment));
+  }
+  h += R(F('ค่าจัดโอน', tmSel), F('จำนวนค่าจัดโอน (บาท)', M('transfer_fee', v.transfer_fee), '', 'r2w_transfer'));
+  if (kind === 'delivery') {
+    h += R(F('ค่าประกัน (ถ้ามี)', M('insurance_fee', v.insurance_fee)), F('ค่าใช้จ่ายอื่น ๆ (ถ้ามี)', M('other_fee', v.other_fee)));
+  }
+  h += R(F('ช่องทาง', S('channel', chOpts, v.channel || CHANNELS[0])), F('รหัสนายหน้า', T('broker_code', v.broker_code, ' placeholder="NC001"'), 'ว่างได้ถ้าไม่มีนายหน้า', 'r2w_broker'));
+  h += R(F('ชื่อลูกค้า', T('customer_name', v.customer_name)), F('เบอร์ติดต่อ', T('customer_phone', v.customer_phone)));
+  if (kind === 'booking') h += F('หมายเหตุ', `<textarea id="r2d_note">${escapeHtml(v.note || '')}</textarea>`);
+  if (kind === 'delivery') h += F('สรุปยอดใช้จ่ายวันออกรถ', '<div class="r2-sum" id="r2d_sum"></div>');
+
+  document.getElementById('r2DocBody').innerHTML = `<div oninput="r2DocUpdate()" onchange="r2DocUpdate()">${h}</div>`;
+  const cl = document.getElementById('r2CaseList');
+  if (cl) {
+    const store = kind === 'booking' ? r2Bookings : r2Deliveries;
+    cl.innerHTML = r2CaseChoices().filter(c => !store[String(c.id)]).map(c => `<option value="${escapeHtml(c.caseCode)}">${escapeHtml((c.customerName || '') + ' · ' + (c.carCode || ''))}</option>`).join('');
+  }
+  const fl = document.getElementById('r2FinList');
+  if (fl) {
+    const names = {};
+    Object.values(r2Bookings).concat(Object.values(r2Deliveries)).forEach(x => { if (x.finance_company) names[x.finance_company] = 1; });
+    fl.innerHTML = Object.keys(names).sort().map(n => `<option value="${escapeHtml(n)}">`).join('');
+  }
+  r2DocUpdate();
+}
+
+function r2OnCaseChange() {
+  const code = (document.getElementById('r2d_case').value || '').trim().toUpperCase();
+  if (!code) return;
+  const c = r2CaseChoices().find(x => x.caseCode === code);
+  if (!c) { showToast('ไม่พบเคส ' + code + ' ในรายการของคุณ', true); return; }
+  const store = r2DocKind === 'booking' ? r2Bookings : r2Deliveries;
+  if (store[String(c.id)]) {
+    showToast('เคส ' + code + ' มี' + (r2DocKind === 'booking' ? 'ใบจอง' : 'ใบส่งมอบ') + 'แล้ว — เปิดฉบับเดิมให้แก้ไข');
+    openR2Doc(r2DocKind, String(c.id));
+    return;
+  }
+  if (String(c.id) === r2DocCaseId) return;
+  r2DocCaseId = String(c.id);
+  r2RenderDocForm(r2Prefill(r2DocKind, r2DocCaseId));
+}
+
+function r2DocUpdate() {
+  const g = id => document.getElementById('r2d_' + id);
+  const show = (wid, on) => { const el = document.getElementById(wid); if (el) el.classList.toggle('hidden', !on); };
+  const tm = g('transfer_mode');
+  if (tm) show('r2w_transfer', tm.value === 'ตัวเลข');
+  const bt = g('buy_type');
+  const fin = !!bt && bt.value === 'ไฟแนนซ์';
+  show('r2w_finco', fin);
+  show('r2w_finamt', fin);
+  const ch = g('channel');
+  if (ch) show('r2w_broker', R2_BROKER_CHANNELS.indexOf(ch.value) !== -1);
+  const sum = document.getElementById('r2d_sum');
+  if (sum) {
+    const n = id => { const el = g(id); return el ? (r1Num(el.value) || 0) : 0; };
+    const mode = tm ? tm.value : 'แถม';
+    const transfer = mode === 'ตัวเลข' ? n('transfer_fee') : 0;
+    const total = n('down_payment') + transfer + n('insurance_fee') + n('other_fee');
+    const trLbl = mode === 'ตามจริง' ? 'ค่าจัดโอน (เก็บตามจริง — ยังไม่รวมในยอด)' : mode === 'แถม' ? 'ค่าจัดโอน (แถม)' : 'ค่าจัดโอน';
+    sum.innerHTML = `
+      <div class="r2-sum-row"><span>เงินดาวน์</span><span class="num">${r2M(n('down_payment'))}</span></div>
+      <div class="r2-sum-row"><span>${trLbl}</span><span class="num">${r2M(transfer)}</span></div>
+      <div class="r2-sum-row"><span>ค่าประกัน</span><span class="num">${r2M(n('insurance_fee'))}</span></div>
+      <div class="r2-sum-row"><span>ค่าใช้จ่ายอื่น ๆ</span><span class="num">${r2M(n('other_fee'))}</span></div>
+      <div class="r2-sum-row total"><span>รวมยอดใช้จ่ายวันออกรถ</span><span class="num">${r2M(total)} บาท</span></div>`;
+  }
+}
+
+/* อ่านค่าจากฟอร์ม (ไม่ตรวจความครบถ้วน ใช้ทั้งตอนบันทึกและตอนสร้างรูป/คัดลอก) */
+function r2DocRead() {
+  const g = id => { const el = document.getElementById('r2d_' + id); return el ? el.value : undefined; };
+  const s = id => { const x = g(id); return x === undefined ? null : (x.trim() || null); };
+  const n = id => { const x = g(id); return x === undefined ? null : r1Num(x); };
+  const kind = r2DocKind;
+  const store = kind === 'booking' ? r2Bookings : r2Deliveries;
+  const base = r2DocIsNew ? null : store[r2DocCaseId];
+  const typed = r2DocIsNew ? (g('case') || '').trim().toUpperCase() : '';
+  const c = base ? r2CaseOf(base) : r2CaseChoices().find(x => x.caseCode === typed);
+  const transfer_mode = g('transfer_mode') || 'แถม';
+  const buy_type = g('buy_type') || 'เงินสด';
+  const channel = s('channel');
+  const rec = {
+    case_id: base ? base.case_id : (c ? String(c.id) : null),
+    case_code: c ? c.caseCode : (base ? base.case_code : typed || null),
+    car_code: c ? c.carCode : (base ? base.car_code : null),
+    sales_username: c ? c.salesPerson : (base ? base.sales_username : null),
+    booking_date: s('booking_date'),
+    mileage: n('mileage'), plate: s('plate'),
+    list_price: n('list_price'), sold_price: n('sold_price'),
+    deposit_amount: n('deposit_amount'),
+    transfer_mode, transfer_fee: transfer_mode === 'ตัวเลข' ? n('transfer_fee') : null,
+    buy_type, finance_company: buy_type === 'ไฟแนนซ์' ? s('finance_company') : null,
+    channel, broker_code: (channel && R2_BROKER_CHANNELS.indexOf(channel) !== -1 && s('broker_code')) ? s('broker_code').toUpperCase() : null,
+    customer_name: s('customer_name'), customer_phone: s('customer_phone'),
+  };
+  if (kind === 'booking') {
+    rec.deposit_method = g('deposit_method') || 'โอน';
+    rec.note = s('note');
+  } else {
+    rec.delivery_date = s('delivery_date');
+    rec.finance_amount = buy_type === 'ไฟแนนซ์' ? n('finance_amount') : null;
+    rec.down_payment = n('down_payment');
+    rec.insurance_fee = n('insurance_fee');
+    rec.other_fee = n('other_fee');
+  }
+  return rec;
+}
+
+async function r2SaveDoc() {
+  if (!r2CanDocs() || !r2DocKind) return;
+  const kind = r2DocKind;
+  const rec = r2DocRead();
+  if (!rec.case_id) { showToast('กรุณาเลือกรหัสเคสที่มีอยู่ในระบบ', true); return; }
+  if (!r2Own({ case_id: rec.case_id, sales_username: rec.sales_username })) { showToast('เคสนี้ไม่ใช่เคสที่คุณดูแล', true); return; }
+  if (kind === 'booking' && !rec.booking_date) { showToast('กรุณาเลือกวันที่จอง', true); return; }
+  if (kind === 'delivery') {
+    if (!rec.delivery_date) { showToast('กรุณาเลือกวันที่ออกรถ', true); return; }
+    if (!(rec.list_price > 0) || !(rec.sold_price > 0)) { showToast('กรุณากรอกราคาตั้งขายและราคาที่ขายไป (ใช้คำนวณสเต็ปค่าคอม)', true); return; }
+  }
+  const store = kind === 'booking' ? r2Bookings : r2Deliveries;
+  if (r2DocIsNew && store[rec.case_id]) { showToast('เคสนี้มี' + (kind === 'booking' ? 'ใบจอง' : 'ใบส่งมอบ') + 'แล้ว', true); return; }
+  const now = Date.now();
+  rec.updated_at = now;
+  if (r2DocIsNew) { rec.created_at = now; rec.created_by = session.username; }
+  const btn = document.getElementById('r2SaveBtn');
+  btn.disabled = true;
+  try {
+    const { error } = await sb.from(kind === 'booking' ? 'car_bookings' : 'car_deliveries').upsert(rec, { onConflict: 'case_id' });
+    if (error) throw error;
+    let effectErr = null;
+    try { await r2ApplyEffects(kind, rec); } catch (e) { effectErr = e; }
+    showToast(effectErr
+      ? 'บันทึกแล้ว แต่อัปเดตสถานะรถไม่สำเร็จ: ' + effectErr.message
+      : (kind === 'booking' ? 'บันทึกใบจองแล้ว' : 'บันทึกใบส่งมอบแล้ว — รถ ' + (rec.car_code || '') + ' เป็นสถานะ "ขาย"'), !!effectErr);
+    closeR2Doc();
+    reloadR2Bookings(); reloadR2Deliveries(); reloadCars(); reloadCarDetails();
+  } catch (e) {
+    showToast('บันทึกไม่สำเร็จ: ' + e.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/* ใบจอง → สถานะรถ "จอง" / ใบส่งมอบ → "ขาย" + sold_date = วันที่ออกรถ */
+async function r2ApplyEffects(kind, rec) {
+  const code = rec.car_code;
+  if (!code) return;
+  const car = r1Car(code), d = carDetails[code];
+  if (kind === 'booking') {
+    if (d && !(car && car.sold) && d.stock_status !== 'จอง' && d.stock_status !== 'ขาย') {
+      const { error } = await sb.from('car_details').update({ stock_status: 'จอง', updated_at: Date.now() }).eq('code', code);
+      if (error) throw error;
+    }
+    return;
+  }
+  if (car && (!car.sold || !car.soldCaseId)) {
+    const patch = { sold: true };
+    if (!car.soldCaseId) patch.sold_case_id = rec.case_id;
+    const { error } = await sb.from('cars').update(patch).eq('code', code);
+    if (error) throw error;
+  }
+  if (d) {
+    const { error } = await sb.from('car_details').update({ stock_status: 'ขาย', sold_date: rec.delivery_date, updated_at: Date.now() }).eq('code', code);
+    if (error) throw error;
+  }
+}
+
+function r2AskDeleteDoc(kind, caseId) {
+  if (!isAdmin()) return;
+  const rec = (kind === 'booking' ? r2Bookings : r2Deliveries)[caseId];
+  if (!rec) return;
+  openConfirm('ลบ' + (kind === 'booking' ? 'ใบจอง' : 'ใบส่งมอบ') + 'นี้?',
+    kind === 'booking' ? 'ถ้ารถอยู่สถานะ "จอง" และไม่มีใบอื่น จะกลับเป็น "ว่าง"' : 'รถจะกลับเป็น "จอง" (ถ้ามีใบจอง) หรือ "ว่าง" — เว้นแต่เคสยังเป็น "ขายแล้ว" หรือมีใบส่งมอบอื่นของรถคันนี้',
+    async () => {
+      try {
+        const { error } = await sb.from(kind === 'booking' ? 'car_bookings' : 'car_deliveries').delete().eq('case_id', caseId);
+        if (error) throw error;
+        try { await r2RevertAfterDelete(kind, rec); } catch (e) { showToast('ลบแล้ว แต่ปรับสถานะรถไม่สำเร็จ: ' + e.message, true); }
+        showToast('ลบแล้ว');
+        reloadR2Bookings(); reloadR2Deliveries(); reloadCars(); reloadCarDetails();
+      } catch (e) { showToast('ลบไม่สำเร็จ: ' + e.message, true); }
+    });
+}
+async function r2RevertAfterDelete(kind, rec) {
+  const code = rec.car_code;
+  if (!code) return;
+  const car = r1Car(code), d = carDetails[code];
+  const otherBooking = Object.values(r2Bookings).some(b => b.car_code === code && b.case_id !== rec.case_id);
+  const otherDelivery = Object.values(r2Deliveries).some(x => x.car_code === code && x.case_id !== rec.case_id);
+  const stillSoldCase = cases.some(c => c.carCode === code && c.status === SOLD_STATUS);
+  if (kind === 'booking') {
+    const hasDelivery = otherDelivery || !!r2Deliveries[rec.case_id];
+    if (d && d.stock_status === 'จอง' && !otherBooking && !hasDelivery) {
+      const { error } = await sb.from('car_details').update({ stock_status: 'ว่าง', updated_at: Date.now() }).eq('code', code);
+      if (error) throw error;
+    }
+    return;
+  }
+  if (stillSoldCase || otherDelivery) return;
+  if (car && car.sold && (!car.soldCaseId || String(car.soldCaseId) === String(rec.case_id))) {
+    const { error } = await sb.from('cars').update({ sold: false, sold_case_id: null }).eq('code', code);
+    if (error) throw error;
+  }
+  if (d) {
+    const hasBooking = Object.values(r2Bookings).some(b => b.car_code === code);
+    const { error } = await sb.from('car_details').update({ stock_status: hasBooking ? 'จอง' : 'ว่าง', sold_date: null, updated_at: Date.now() }).eq('code', code);
+    if (error) throw error;
+  }
+}
+
+/* ---------- บันทึกเป็นรูป / คัดลอกข้อมูล ---------- */
+function r2SlipLines(kind, v) {
+  const m = x => (x == null || x === '') ? '—' : r2M(x) + ' บาท';
+  const tf = v.transfer_mode === 'ตัวเลข' ? m(v.transfer_fee) : v.transfer_mode === 'ตามจริง' ? 'เก็บตามจริง' : 'แถม';
+  const buy = v.buy_type === 'ไฟแนนซ์' ? 'ไฟแนนซ์' + (v.finance_company ? ' (' + v.finance_company + ')' : '') : 'เงินสด';
+  const ch = (v.channel || '—') + (v.broker_code ? ' · ' + v.broker_code : '');
+  const L = [];
+  const add = (l, val, strong) => { if (val == null || val === '') return; L.push([l, String(val), !!strong]); };
+  if (kind === 'booking') {
+    add('วันที่จอง', v.booking_date ? r1FmtDmy(v.booking_date) : '—');
+  } else {
+    add('วันที่จอง', v.booking_date ? r1FmtDmy(v.booking_date) : '—');
+    add('วันที่ออกรถ', v.delivery_date ? r1FmtDmy(v.delivery_date) : '—');
+  }
+  add('รหัสเคส', v.case_code || '—');
+  add('รหัสรถ', v.car_code || '—');
+  add('รถ', r1Title(v.car_code) || '—');
+  add('เลขไมล์', v.mileage != null ? r2M(v.mileage) + ' กม.' : '—');
+  add('ทะเบียน', v.plate || '—');
+  add('ราคาที่ตั้งขาย', m(v.list_price));
+  add('ราคาที่ขายไป', m(v.sold_price));
+  if (kind === 'booking') {
+    add('ค่าจัดโอน', tf);
+    add('เงินจอง', m(v.deposit_amount) + (v.deposit_method ? ' (' + v.deposit_method + ')' : ''));
+    add('ซื้อ', buy);
+  } else {
+    add('เงินจอง', m(v.deposit_amount));
+    if (v.buy_type === 'ไฟแนนซ์') add('ยอดที่จัดไฟแนนซ์', m(v.finance_amount));
+    add('เงินดาวน์', m(v.down_payment));
+    add('ค่าจัดโอน', tf);
+    if (Number(v.insurance_fee) > 0) add('ค่าประกัน', m(v.insurance_fee));
+    if (Number(v.other_fee) > 0) add('ค่าใช้จ่ายอื่น ๆ', m(v.other_fee));
+    add('ซื้อ', buy);
+  }
+  add('ช่องทาง', ch);
+  add('ชื่อลูกค้า', v.customer_name || '—');
+  add('เบอร์ติดต่อ', v.customer_phone || '—');
+  add('เซลล์ผู้ดูแล', v.sales_username ? salesDisplayName(v.sales_username) : '');
+  if (kind === 'booking') add('หมายเหตุ', v.note);
+  if (kind === 'delivery') add('สรุปยอดใช้จ่ายวันออกรถ', m(r2DeliverySummary(v)) + (v.transfer_mode === 'ตามจริง' ? ' (ไม่รวมค่าจัดโอนเก็บตามจริง)' : ''), true);
+  return { title: kind === 'booking' ? 'ใบจองรถ' : 'ใบส่งมอบรถ', lines: L };
+}
+async function r2SlipCopy() {
+  if (!r2DocKind) return;
+  const s = r2SlipLines(r2DocKind, r2DocRead());
+  const text = s.title + '\n' + s.lines.map(([l, v]) => l + ': ' + v).join('\n');
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+    }
+    showToast('คัดลอกข้อมูลแล้ว');
+  } catch (e) { showToast('คัดลอกไม่สำเร็จ: ' + e.message, true); }
+}
+function r2WrapText(ctx, text, maxW) {
+  const out = [];
+  String(text).split('\n').forEach(par => {
+    let line = '';
+    Array.from(par).forEach(ch => {
+      if (line && ctx.measureText(line + ch).width > maxW) { out.push(line); line = ch; } else line += ch;
+    });
+    out.push(line);
+  });
+  return out;
+}
+async function r2SlipImage() {
+  if (!r2DocKind) return;
+  const kind = r2DocKind;
+  const v = r2DocRead();
+  const s = r2SlipLines(kind, v);
+  try { if (document.fonts && document.fonts.load) { await document.fonts.load('600 16px "Noto Sans Thai"'); await document.fonts.load('700 16px "Noto Sans Thai"'); } } catch (e) {}
+  const FONT = '"Noto Sans Thai", sans-serif';
+  const W = 640, PAD = 28, LABEL_W = 190, SCALE = 2, LH = 22, GAP = 10, HEAD = 88;
+  const mctx = document.createElement('canvas').getContext('2d');
+  mctx.font = '500 15px ' + FONT;
+  const valW = W - PAD * 2 - LABEL_W;
+  const rows = s.lines.map(([l, val, strong]) => {
+    mctx.font = (strong ? '700' : '500') + ' 15px ' + FONT;
+    return { l, strong, wrapped: r2WrapText(mctx, val, valW) };
+  });
+  let H = HEAD + 14;
+  rows.forEach(r => { H += r.wrapped.length * LH + GAP; });
+  H += 44;
+  const cv = document.createElement('canvas');
+  cv.width = W * SCALE; cv.height = H * SCALE;
+  const ctx = cv.getContext('2d');
+  ctx.scale(SCALE, SCALE);
+  ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#1D3145'; ctx.fillRect(0, 0, W, HEAD);
+  ctx.fillStyle = '#C97F00'; ctx.fillRect(0, HEAD, W, 4);
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = '#E3A23D'; ctx.font = '700 13px ' + FONT; ctx.fillText('NICE CARS', PAD, 30);
+  ctx.fillStyle = '#FFFFFF'; ctx.font = '700 24px ' + FONT; ctx.fillText(s.title, PAD, 62);
+  let y = HEAD + 14 + 4;
+  rows.forEach(r => {
+    ctx.font = '500 14px ' + FONT; ctx.fillStyle = '#7E8C99';
+    ctx.fillText(r.l, PAD, y + 16);
+    ctx.font = (r.strong ? '700' : '500') + ' 15px ' + FONT;
+    ctx.fillStyle = r.strong ? '#1D3145' : '#16202B';
+    r.wrapped.forEach((ln, i) => ctx.fillText(ln, PAD + LABEL_W, y + 16 + i * LH));
+    const rowH = r.wrapped.length * LH;
+    ctx.strokeStyle = '#EAEEF1'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(PAD, y + rowH + GAP / 2 + 2); ctx.lineTo(W - PAD, y + rowH + GAP / 2 + 2); ctx.stroke();
+    y += rowH + GAP;
+  });
+  ctx.font = '400 11px ' + FONT; ctx.fillStyle = '#9AA5AE';
+  const now = new Date();
+  ctx.fillText('สร้างเมื่อ ' + r1FmtDmy(r1TodayStr()) + ' ' + String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0'), PAD, H - 16);
+  const blob = await new Promise(res => cv.toBlob(res, 'image/png'));
+  if (!blob) { showToast('สร้างรูปไม่สำเร็จ', true); return; }
+  const name = (kind === 'booking' ? 'booking_' : 'delivery_') + (v.case_code || 'new') + '.png';
+  try {
+    const file = new File([blob], name, { type: 'image/png' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file], title: s.title }); return; }
+      catch (e) { if (e && e.name === 'AbortError') return; }
+    }
+  } catch (e) { /* ใช้การดาวน์โหลดแทน */ }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  showToast('บันทึกรูปแล้ว');
+}
+
+/* ---------- บัญชีต่อคัน ---------- */
+function r2LedgerRefs(code) {
+  const dvs = Object.values(r2Deliveries).filter(x => x.car_code === code)
+    .sort((a, b) => String(b.delivery_date || '').localeCompare(String(a.delivery_date || '')));
+  const delivery = dvs[0] || null;
+  let booking = delivery ? (r2Bookings[delivery.case_id] || null) : null;
+  if (!booking) {
+    const bks = Object.values(r2Bookings).filter(x => x.car_code === code)
+      .sort((a, b) => String(b.booking_date || '').localeCompare(String(a.booking_date || '')));
+    booking = bks[0] || null;
+  }
+  return { delivery, booking };
+}
+/* คำนวณต้นทุน/รายรับของรถ 1 คัน — Lo = ข้อมูลบัญชีจากฟอร์ม (ใช้ตอนดูตัวอย่างสด) */
+function r2CostOf(code, Lo) {
+  const L = Lo || r2Ledger[code] || {};
+  const pv = carPrivate[code] || {};
+  const d = carDetails[code] || {};
+  const refs = r2LedgerRefs(code);
+  const hasPrice = pv.purchase_price != null && pv.purchase_price !== '';
+  const price = Number(pv.purchase_price) || 0;
+  const buyComm = Number(pv.purchase_commission) || 0;
+  const pledge = price + buyComm;
+  const adjAmt = Number(L.pledge_adjust_amount) || 0;
+  const adjust = L.pledge_adjust_type === 'ขาด' ? adjAmt : L.pledge_adjust_type === 'เกิน' ? -adjAmt : 0;
+  const pledgeDate = r1PledgeDate(d);
+  const endDate = L.pledge_returned_date || r1TodayStr();
+  const days = pledgeDate ? r2DaysBetween(pledgeDate, endDate) : null;
+  const interest = days == null ? 0 : pledge * R2_INTEREST_PER_DAY * days;
+  const comm = refs.delivery ? r2Commission(refs.delivery) : null;
+  const salesComm = comm ? comm.amount : 0;
+  const tmode = refs.delivery ? refs.delivery.transfer_mode : (refs.booking ? refs.booking.transfer_mode : null);
+  const transferActual = tmode === 'ตามจริง' ? (Number(L.transfer_actual) || 0) : 0;
+  const otherExp = r2ListSum(L.other_expenses);
+  const num = x => Number(x) || 0;
+  const rest = num(L.closing_amount) + num(L.inspect_fee) + num(L.broker_sell_fee) + num(L.wash_fee) + salesComm + transferActual + otherExp;
+  const cost = pledge + adjust + interest + rest;
+  // รายรับ: เงินจองนับเมื่อมีใบส่งมอบ (ออกรถแล้ว) กันนับซ้ำกับ "ยึดเงินจอง" ของใบจองที่ยกเลิก
+  const depositAuto = refs.delivery ? num(refs.booking ? refs.booking.deposit_amount : refs.delivery.deposit_amount) : 0;
+  const depositPending = (!refs.delivery && refs.booking) ? num(refs.booking.deposit_amount) : 0;
+  const transferCollected = (tmode === 'ตามจริง' && L.transfer_status === 'เก็บเงินแล้ว') ? transferActual : 0;
+  const income = depositAuto + num(L.release_money) + num(L.finance_income) + num(L.forfeited_deposit) + r2ListSum(L.other_income) + transferCollected;
+  return { hasPrice, price, buyComm, pledge, adjust, pledgeDate, endDate, days, interest, salesComm, comm, tmode, transferActual, otherExp, rest, cost, depositAuto, depositPending, transferCollected, income, profit: income - cost, refs, returned: !!L.pledge_returned_date };
+}
+
+function r2RenderLedger() {
+  const body = document.getElementById('r2LedgerBody');
+  if (!body || !isAdmin()) return;
+  const search = (document.getElementById('r2LedgerSearch').value || '').trim().toLowerCase();
+  const f = document.getElementById('r2LedgerFilter').value;
+  const all = cars.map(c => ({ code: c.code, st: r1Status(c.code), c: r2CostOf(c.code) }));
+  let stockCost = 0, stockCnt = 0, noPrice = 0;
+  all.forEach(r => { if (r.st !== 'ขาย') { stockCnt++; if (r.c.hasPrice) stockCost += r.c.cost; else noPrice++; } });
+  document.getElementById('r2LedgerSub').textContent = 'ต้นทุนรวมรถที่ยังไม่ขาย ' + r2M(stockCost) + ' บาท (' + stockCnt + ' คัน' + (noPrice ? ' · ยังไม่มีราคาซื้อ ' + noPrice + ' คัน ไม่นับรวม' : '') + ')';
+  let rows = all.filter(r => f === 'all' ? true : f === 'sold' ? r.st === 'ขาย' : r.st !== 'ขาย');
+  if (search) rows = rows.filter(r => [r.code, r1Title(r.code), (carDetails[r.code] || {}).plate].join(' ').toLowerCase().includes(search));
+  if (!rows.length) { body.innerHTML = '<div class="empty-state"><div class="big">ไม่มีรถในมุมมองนี้</div></div>'; return; }
+  body.innerHTML = `<table><thead><tr><th>รหัสรถ</th><th>รถ</th><th>สถานะ</th><th>ต้นทุน ณ ปัจจุบัน</th><th>รายรับ</th><th>กำไร/ขาดทุน</th><th>ข้อสังเกต</th></tr></thead><tbody>` +
+    rows.map(r => {
+      const c = r.c, col = R1_STATUS_COLOR[r.st];
+      const flags = [];
+      if (!c.hasPrice) flags.push('ยังไม่มีราคาซื้อ');
+      else if (!c.pledgeDate) flags.push('ไม่มีวันที่จำนำ/วันที่รถเข้า');
+      if (r.st === 'ขาย' && c.hasPrice && !c.returned) flags.push('ยังไม่ใส่วันที่คืนจำนำ (ดอกเบี้ยยังวิ่ง)');
+      const showProfit = r.st === 'ขาย' && c.hasPrice;
+      return `<tr data-code="${escapeHtml(r.code)}" onclick="r2LedgerOpen(this.dataset.code)">
+        <td><span class="code-badge">${escapeHtml(r.code)}</span></td>
+        <td><div class="cust-name">${escapeHtml(r1Title(r.code))}</div></td>
+        <td><span class="badge" style="background:${col}18; color:${col};"><span class="dot"></span>${r.st}</span></td>
+        <td>${c.hasPrice ? '<b>' + r2M(c.cost) + '</b>' : '<span class="muted">—</span>'}${c.hasPrice && c.days != null ? `<div class="muted">ดอกเบี้ย ${c.days} วัน ${r2M(c.interest)}</div>` : ''}</td>
+        <td>${c.income ? r2M(c.income) : '<span class="muted">—</span>'}</td>
+        <td>${showProfit ? `<b class="${c.profit >= 0 ? 'r2-pos' : 'r2-neg'}">${c.profit >= 0 ? '+' : ''}${r2M(c.profit)}</b>` : '<span class="muted">—</span>'}</td>
+        <td>${flags.map(x => `<span class="r2-flag">${x}</span>`).join(' ') || '<span class="muted">—</span>'}</td>
+      </tr>`;
+    }).join('') + '</tbody></table>';
+}
+
+function r2RowHtml(label, amount) {
+  return `<div class="r2-row"><input type="text" class="r2-lbl" placeholder="รายการ" value="${escapeHtml(label || '')}"><input type="text" class="r2-amt" inputmode="decimal" autocomplete="off" placeholder="บาท" oninput="r1MoneyInput(this)" value="${escapeHtml(r1MoneyShown(amount))}"><button type="button" class="icon-btn danger" title="ลบแถว" onclick="this.parentNode.remove(); r2LedgerPreview()">×</button></div>`;
+}
+function r2AddRow(id) {
+  const box = document.getElementById(id);
+  if (!box) return;
+  box.insertAdjacentHTML('beforeend', r2RowHtml('', null));
+  const last = box.lastElementChild;
+  if (last) last.querySelector('.r2-lbl').focus();
+}
+function r2ReadRows(id) {
+  const box = document.getElementById(id);
+  if (!box) return [];
+  return Array.from(box.querySelectorAll('.r2-row')).map(r => ({ label: r.querySelector('.r2-lbl').value.trim(), amount: r1Num(r.querySelector('.r2-amt').value) }))
+    .filter(x => x.label || x.amount != null);
+}
+
+function r2LedgerOpen(code) {
+  if (!isAdmin()) return;
+  r2LedgerCode = code;
+  document.getElementById('r2LedgerTitle').textContent = code + (r1Title(code) ? ' · ' + r1Title(code) : '');
+  r2LedgerRender(code);
+  document.getElementById('r2LedgerOverlay').classList.add('open');
+}
+function r2LedgerClose() { document.getElementById('r2LedgerOverlay').classList.remove('open'); r2LedgerCode = null; }
+
+function r2LedgerRender(code) {
+  const L = r2Ledger[code] || {};
+  const pv = carPrivate[code] || {};
+  const d = carDetails[code] || {};
+  const refs = r2LedgerRefs(code);
+  const c0 = r2CostOf(code);
+  const F = (label, ctl, hint) => `<div class="field"><label>${label}</label>${ctl}${hint ? '<div class="hint">' + hint + '</div>' : ''}</div>`;
+  const M = (id, val) => `<input type="text" id="r2l_${id}" inputmode="decimal" autocomplete="off" oninput="r1MoneyInput(this)" value="${escapeHtml(r1MoneyShown(val))}">`;
+  const R = (...c) => `<div class="field-row">${c.join('')}</div>`;
+
+  let h = `<div class="r2-info">
+    ราคารับซื้อ: <b>${pv.purchase_price != null ? r2M(pv.purchase_price) : '— (ยังไม่กรอก)'}</b> บาท · ค่าคอมซื้อ: <b>${pv.purchase_commission != null ? r2M(pv.purchase_commission) : '—'}</b><br>
+    วันที่รับรถเข้า: <b>${d.received_date ? r1FmtDmy(d.received_date) : '—'}</b> · วันที่จำนำ: <b>${c0.pledgeDate ? r1FmtDmy(c0.pledgeDate) : '—'}</b>
+    ${isAdmin() && !c0.hasPrice ? '<br><span class="r2-neg">ยังไม่มีราคาซื้อ — กรอกได้ที่ฟอร์มรถเข้าในหน้าสต็อกรถ</span>' : ''}
+  </div>`;
+
+  h += `<div class="r1-form-section" style="border-top:none; padding-top:0;"><h4>รายจ่าย</h4>`;
+  h += F('ยอดจำนำ (ราคารับซื้อ + ค่าคอมนายหน้าซื้อ)', `<div class="r2-static">${c0.hasPrice ? r2M(c0.pledge) + ' บาท' : '—'}</div>`);
+  h += R(
+    F('ยอดจำนำขาด / เกิน', `<select id="r2l_pledge_adjust_type"><option value="">— ไม่มี —</option><option value="ขาด"${L.pledge_adjust_type === 'ขาด' ? ' selected' : ''}>จำนำขาด (ต้นทุนเพิ่ม +)</option><option value="เกิน"${L.pledge_adjust_type === 'เกิน' ? ' selected' : ''}>จำนำเกิน (ต้นทุนลด −)</option></select>`),
+    F('จำนวน (บาท)', M('pledge_adjust_amount', L.pledge_adjust_amount), 'กรอกเป็นจำนวนบวก ระบบใส่เครื่องหมายให้'));
+  h += F('วันที่คืนจำนำ', `<input type="text" id="r2l_pledge_returned_date" inputmode="numeric" autocomplete="off" maxlength="10" placeholder="พิมพ์ตัวเลข เช่น 31122027" oninput="r1DateInput(this)" value="${escapeHtml(L.pledge_returned_date ? r1FmtDmy(L.pledge_returned_date) : '')}">`, 'ใส่เมื่อคืนจำนำแล้ว ดอกเบี้ยจะหยุดนับ · ว่าง = นับถึงวันนี้');
+  h += F('ยอดปิดไฟแนนซ์ (เฉพาะกรณียังไม่รวมในราคารับซื้อ)', M('closing_amount', L.closing_amount), 'เงินมัดจำเล่มไม่นับเป็นต้นทุน');
+  h += R(F('ค่าดูรถ', M('inspect_fee', L.inspect_fee)), F('ค่าคอมนายหน้าขาย', M('broker_sell_fee', L.broker_sell_fee)));
+  h += F('ค่าล้างรถ', M('wash_fee', L.wash_fee));
+  h += F('ค่าคอมเซลล์ขาย (คำนวณจากใบส่งมอบ)', `<div class="r2-static">${c0.comm
+    ? `${escapeHtml(salesDisplayName(r2SalesOf(refs.delivery)))} · ${c0.comm.steps} สเต็ป × ${r2M(c0.comm.rate)} = <b>${r2M(c0.comm.amount)}</b> บาท${c0.comm.manual ? ' <span class="r2-flag">แก้ด้วยมือ</span>' : ''}`
+    : 'ยังไม่มีใบส่งมอบ'}</div>`, 'แก้สเต็ปได้ที่หน้า "ค่าคอมเซลล์"');
+  if (c0.tmode === 'ตามจริง') {
+    h += R(
+      F('ค่าจัดโอน (ยอดจริงที่ร้านจ่าย)', M('transfer_actual', L.transfer_actual), 'ใบนี้ระบุเก็บตามจริง'),
+      F('การเก็บเงินจากลูกค้า', `<select id="r2l_transfer_status"><option value="ยังไม่เก็บ"${L.transfer_status !== 'เก็บเงินแล้ว' ? ' selected' : ''}>ยังไม่เก็บ</option><option value="เก็บเงินแล้ว"${L.transfer_status === 'เก็บเงินแล้ว' ? ' selected' : ''}>เก็บเงินแล้ว</option></select>`, 'เก็บแล้ว = นับเป็นรายรับเท่ายอดจริง'));
+  }
+  h += `<div class="field"><label>ค่าใช้จ่ายอื่น ๆ</label><div id="r2l_otherExp">${(L.other_expenses || []).map(x => r2RowHtml(x.label, x.amount)).join('')}</div><button type="button" class="btn btn-ghost btn-sm r2-add" onclick="r2AddRow('r2l_otherExp')">+ เพิ่มแถว</button></div>`;
+  h += `</div>`;
+
+  h += `<div class="r1-form-section"><h4>รายรับ</h4>`;
+  h += F('เงินจอง (จากใบจอง/ใบส่งมอบ)', `<div class="r2-static">${refs.delivery
+    ? r2M(c0.depositAuto) + ' บาท'
+    : (c0.depositPending ? 'มีใบจอง ' + r2M(c0.depositPending) + ' บาท — จะนับเป็นรายรับเมื่อมีใบส่งมอบ' : 'ยังไม่มีใบจอง/ใบส่งมอบ')}</div>`, 'ถ้ายกเลิกการจองและยึดเงินจอง ให้ใส่ที่ช่อง "ยึดเงินจอง" ด้านล่าง');
+  h += R(F('เงินปล่อยรถ', M('release_money', L.release_money)), F('เงินไฟแนนซ์', M('finance_income', L.finance_income)));
+  if (refs.delivery) {
+    const bits = [];
+    if (Number(refs.delivery.down_payment) > 0) bits.push('เงินดาวน์ในใบส่งมอบ ' + r2M(refs.delivery.down_payment));
+    if (Number(refs.delivery.finance_amount) > 0) bits.push('ยอดจัดไฟแนนซ์ ' + r2M(refs.delivery.finance_amount));
+    if (bits.length) h += `<div class="muted" style="margin:-8px 0 14px;">อ้างอิงจากใบส่งมอบ: ${bits.join(' · ')} (ไม่ไหลเข้าอัตโนมัติ — กรอกยอดจริงที่ได้รับ)</div>`;
+  }
+  h += F('ยึดเงินจอง', M('forfeited_deposit', L.forfeited_deposit));
+  h += `<div class="field"><label>รายรับอื่น ๆ</label><div id="r2l_otherInc">${(L.other_income || []).map(x => r2RowHtml(x.label, x.amount)).join('')}</div><button type="button" class="btn btn-ghost btn-sm r2-add" onclick="r2AddRow('r2l_otherInc')">+ เพิ่มแถว</button></div>`;
+  h += F('หมายเหตุ', `<textarea id="r2l_note">${escapeHtml(L.note || '')}</textarea>`);
+  h += `</div>`;
+
+  h += `<div class="r1-form-section"><h4>ต้นทุน ณ ปัจจุบัน (คำนวณเอง)</h4><div id="r2l_warn"></div><div class="r2-sum" id="r2l_sum"></div></div>`;
+  document.getElementById('r2LedgerForm').innerHTML = `<div oninput="r2LedgerPreview()" onchange="r2LedgerPreview()">${h}</div>`;
+  r2LedgerPreview();
+}
+
+function r2LedgerCollect(strict) {
+  const code = r2LedgerCode;
+  const old = r2Ledger[code] || {};
+  const has = id => !!document.getElementById('r2l_' + id);
+  const g = id => { const el = document.getElementById('r2l_' + id); return el ? el.value : ''; };
+  let err = null;
+  const pd = r1ParseDmy(g('pledge_returned_date'));
+  if (!pd.ok && strict) err = 'รูปแบบวันที่คืนจำนำไม่ถูกต้อง — พิมพ์เป็น วว/ดด/ปปปป เช่น 31/12/2027';
+  const L = {
+    pledge_returned_date: pd.ok ? pd.iso : (old.pledge_returned_date || null),
+    pledge_adjust_type: g('pledge_adjust_type') || null,
+    pledge_adjust_amount: r1Num(g('pledge_adjust_amount')),
+    closing_amount: r1Num(g('closing_amount')),
+    inspect_fee: r1Num(g('inspect_fee')),
+    broker_sell_fee: r1Num(g('broker_sell_fee')),
+    wash_fee: r1Num(g('wash_fee')),
+    transfer_actual: has('transfer_actual') ? r1Num(g('transfer_actual')) : (old.transfer_actual == null ? null : old.transfer_actual),
+    transfer_status: has('transfer_status') ? g('transfer_status') : (old.transfer_status || null),
+    other_expenses: r2ReadRows('r2l_otherExp'),
+    release_money: r1Num(g('release_money')),
+    finance_income: r1Num(g('finance_income')),
+    forfeited_deposit: r1Num(g('forfeited_deposit')),
+    other_income: r2ReadRows('r2l_otherInc'),
+    note: (g('note') || '').trim() || null,
+  };
+  return { L, err };
+}
+
+function r2LedgerPreview() {
+  const code = r2LedgerCode;
+  const sum = document.getElementById('r2l_sum');
+  if (!code || !sum) return;
+  const { L } = r2LedgerCollect(false);
+  const c = r2CostOf(code, L);
+  const warn = [];
+  if (!c.hasPrice) warn.push('ยังไม่มีราคาซื้อ — ต้นทุนด้านล่างยังไม่ครบ');
+  else if (!c.pledgeDate) warn.push('ไม่มีวันที่จำนำหรือวันที่รถเข้า — ยังคิดดอกเบี้ยไม่ได้');
+  if (r1Status(code) === 'ขาย' && c.hasPrice && !L.pledge_returned_date) warn.push('รถขายแล้วแต่ยังไม่ใส่วันที่คืนจำนำ — ดอกเบี้ยยังคิดต่อถึงวันนี้');
+  document.getElementById('r2l_warn').innerHTML = warn.map(w => `<div class="r2-warn">${w}</div>`).join('');
+  const row = (l, v, cls) => `<div class="r2-sum-row${cls ? ' ' + cls : ''}"><span>${l}</span><span class="num">${v}</span></div>`;
+  const signed = x => (x > 0 ? '+' : x < 0 ? '−' : '') + r2M(Math.abs(x));
+  sum.innerHTML =
+    row('ยอดจำนำ', r2M(c.pledge)) +
+    row('จำนำขาด/เกิน', c.adjust ? signed(c.adjust) : '—') +
+    row('ดอกเบี้ย 0.5%/วัน × ' + (c.days == null ? '—' : c.days) + ' วัน' + (c.returned ? ' (ถึงวันคืนจำนำ)' : ' (ถึงวันนี้)'), r2M(c.interest)) +
+    row('ค่าใช้จ่ายส่วนอื่น (ดูรถ/คอมนายหน้า/ล้าง/คอมเซลล์/อื่น ๆ)', r2M(c.rest)) +
+    row('ต้นทุน ณ ปัจจุบัน', r2M(c.cost) + ' บาท', 'total') +
+    row('รายรับรวม', r2M(c.income) + ' บาท') +
+    row('กำไร / ขาดทุน (รายรับ − ต้นทุน)', `<span class="${c.profit >= 0 ? 'r2-pos' : 'r2-neg'}">${c.profit >= 0 ? '+' : ''}${r2M(c.profit)} บาท</span>`, 'total');
+}
+
+async function r2LedgerSave() {
+  if (!isAdmin() || !r2LedgerCode) return;
+  const code = r2LedgerCode;
+  const { L, err } = r2LedgerCollect(true);
+  if (err) { showToast(err, true); return; }
+  const btn = document.getElementById('r2LedgerSaveBtn');
+  btn.disabled = true;
+  try {
+    const { error } = await sb.from('car_ledger').upsert(Object.assign({ code }, L, { updated_at: Date.now() }), { onConflict: 'code' });
+    if (error) throw error;
+    showToast('บันทึกบัญชีรถ ' + code + ' แล้ว');
+    r2LedgerClose();
+    reloadR2Ledger();
+  } catch (e) {
+    showToast('บันทึกไม่สำเร็จ: ' + e.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 
 boot();
 </script>
