@@ -5204,6 +5204,13 @@ function r2DivLines(d) {
     ['ยอดที่โอนคืนกองกลาง', m(d.net) + ' บาท', true],
   ];
 }
+// บรรทัดสำหรับคัดลอก / บันทึกเป็นรูป: รหัสรถ + รายการในบัญชีเงินจอง + ยอดโอนคืนกองกลาง + หมายเหตุ
+function r2DivFinalLines(d) {
+  const m = x => r2M(Math.round(x * 100) / 100);
+  return [['รหัสรถ', d.code + (d.label ? ' — ' + d.label : '')]].concat(r2DivAccLines(d), [
+    ['ยอดปันผลโอนคืนกองกลาง (รายรับ − รายจ่าย)', m(d.net) + ' บาท', true],
+    ['หมายเหตุ: ถ้าติดลบ (−) คือกองกลางต้องโอนคืนเงินจอง', '']]);
+}
 // รายการทั้งหมดที่ระบุไว้ในบัญชี "เงินจอง" (รายรับ / รายจ่าย)
 function r2DivAccLines(d) {
   const m = x => r2M(Math.round(x * 100) / 100);
@@ -5229,22 +5236,15 @@ function r2DivOpen(code, fromForm) {
   const m = x => r2M(Math.round(x * 100) / 100);
   const row = (l, v, cls, sub) => `<div class="r2-sum-row${cls ? ' ' + cls : ''}"><span>${l}${sub ? '<div class="muted" style="font-size:12px;">' + sub + '</div>' : ''}</span><span class="num">${v}</span></div>`;
   let h = '';
-  if (!d.hasPrice) h += '<div class="r2-warn">ยังไม่มีราคาซื้อ — ยอดคืนจำนำยังไม่ครบ</div>';
-  h += '<div class="r2-sum">' +
-    row('1. รหัสรถ', escapeHtml(d.code), '', escapeHtml(d.label)) +
-    row('2. รับเงินจอง', m(d.deposit)) +
-    row('3. รับเงินปล่อยรถ', m(d.release)) +
-    row('4. รับเงินไฟแนนซ์', m(d.fin)) +
-    row('5. รับค่าคอมไฟแนนซ์', m(d.finComm)) +
-    row('6. ยอดรวมรับเงิน (ข้อ 2–5)', m(d.totalIn), 'total') +
-    row('7. คืนจำนำ', m(d.pledgeReturn), '', 'ยอดจำนำ ' + m(d.pledge) + (d.adjust ? ' ' + (d.adjust > 0 ? '+' : '−') + ' ขาด/เกิน ' + m(Math.abs(d.adjust)) : '') + ' + ดอกเบี้ย ' + m(d.interest) + (d.days != null ? ' (' + d.days + ' วัน)' : '')) +
-    row('8. ค่านายหน้าขาย', m(d.brokerSell)) +
-    row('9. ยอดที่โอนคืนกองกลาง', `<span class="${d.net >= 0 ? 'r2-pos' : 'r2-neg'}">${m(d.net)} บาท</span>`, 'total', 'รายรับทั้งหมดบัญชี "เงินจอง" ' + m(d.accIn) + ' − รายจ่ายทั้งหมดบัญชี "เงินจอง" ' + m(d.accOut)) +
-    '</div>';
+  if (!d.hasPrice) h += '<div class="r2-warn">ยังไม่มีราคาซื้อ — ยอดรายจ่ายยังไม่ครบ</div>';
+  h += '<div class="r2-sum">' + row('รหัสรถ', escapeHtml(d.code), '', escapeHtml(d.label)) + '</div>';
   h += '<div class="r2-sum" style="margin-top:12px;">' + r2DivAccLines(d).map(([l, v, st]) => {
     return `<div class="r2-sum-row${st ? ' total' : ''}"><span style="${st ? '' : 'padding-left:10px;'}white-space:pre;">${escapeHtml(l.replace(/^ +/, ''))}</span><span class="num">${v}</span></div>`;
   }).join('') + '</div>';
-  if (Math.abs(d.net - d.simpleNet) > 0.005) h += `<div class="r2-info" style="margin-top:10px;">ข้อ 9 คิดจากรายการที่ลงบัญชี "เงินจอง" ซึ่งต่างจากข้อ 6 − 7 − 8 (${m(d.simpleNet)}) เพราะบางรายการลงบัญชีอื่นหรือยังไม่ได้เลือกบัญชี</div>`;
+  h += '<div class="r2-sum" style="margin-top:12px;">' +
+    row('ยอดปันผลโอนคืนกองกลาง', `<span class="${d.net >= 0 ? 'r2-pos' : 'r2-neg'}">${m(d.net)} บาท</span>`, 'total', 'รายรับ ' + m(d.accIn) + ' − รายจ่าย ' + m(d.accOut) + ' (เฉพาะรายการในบัญชี "เงินจอง")') +
+    '</div>';
+  h += '<div class="r2-info" style="margin-top:10px;">หมายเหตุ: ถ้าตัวเลขติดลบ (−) คือกองกลางต้องโอนคืนเงินจอง</div>';
   document.getElementById('r2DivBody').innerHTML = h;
   document.getElementById('r2DivOverlay').classList.add('open');
 }
@@ -5252,7 +5252,7 @@ function r2DivClose() { document.getElementById('r2DivOverlay').classList.remove
 async function r2DivCopy() {
   if (!r2DivCode) return;
   const d = r2DivCurrent();
-  const text = 'ยอดปันผล\n' + r2DivLines(d).map(([l, v], i) => (i + 1) + '. ' + l + ': ' + v).join('\n') + '\n\n' + r2DivAccLines(d).map(([l, v]) => l + (v === '' ? '' : ': ' + v)).join('\n');
+  const text = 'ยอดปันผล\n' + r2DivFinalLines(d).map(([l, v]) => l + (v === '' ? '' : ': ' + v)).join('\n');
   try {
     if (navigator.clipboard && window.isSecureContext) await navigator.clipboard.writeText(text);
     else { const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); }
@@ -5262,7 +5262,7 @@ async function r2DivCopy() {
 async function r2DivImage() {
   if (!r2DivCode) return;
   const d = r2DivCurrent();
-  await r2ImageFromLines({ title: 'ยอดปันผล', lines: r2DivLines(d).map(([l, v, st], i) => [(i + 1) + '. ' + l, v, !!st]).concat(r2DivAccLines(d).map(([l, v, st]) => [l, v, !!st])) }, 'dividend_' + d.code + '.png');
+  await r2ImageFromLines({ title: 'ยอดปันผล', lines: r2DivFinalLines(d).map(([l, v, st]) => [l, v, !!st]) }, 'dividend_' + d.code + '.png');
 }
 
 // หน้าต่างยืนยัน: ปุ่ม ยกเลิก / ยืนยัน (ปุ่มยืนยันสีเขียว ไม่ใช่สีแดงของการลบ)
