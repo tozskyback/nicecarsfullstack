@@ -858,6 +858,11 @@
           </div>
           <div id="r1NoteList"></div>
         </section>
+        <section class="r1-section hidden" id="r3DismissSec">
+          <h3>แจ้งเตือนที่ลบไว้ <span class="r1-count" id="r3DismissCount">0</span></h3>
+          <p class="r1-sub">เห็นเฉพาะเจ้าของเต็นท์ — กด "คืนแจ้งเตือน" ถ้าลบผิด</p>
+          <div id="r3DismissList"></div>
+        </section>
       </div>
     </div>
 
@@ -1007,7 +1012,7 @@
     <div id="tab-monthly" class="hidden">
       <div class="topbar"><div class="topbar-row"><div>
         <h2>บัญชีรายเดือน</h2>
-        <p class="sub">กำไรจากการขายรถ หักรายจ่ายประจำและค่าใช้จ่ายระหว่างเดือน = กำไร/ขาดทุนสุทธิของร้าน</p>
+        <p class="sub">รายรับ (กำไรรถ + รายรับอื่น) หัก Fix Cost และค่าใช้จ่ายระหว่างเดือน = กำไร/ขาดทุนสุทธิของร้าน</p>
       </div></div></div>
       <div class="content">
         <div class="month-bar">
@@ -1019,6 +1024,7 @@
         <div id="r3AcSummary"></div>
         <div id="r3AcForm"></div>
         <div id="r3AcHistory"></div>
+        <div id="r3AcPeriod"></div>
       </div>
     </div>
   </main>
@@ -1432,7 +1438,8 @@
     </div>
     <div class="drawer-body" id="r3FinForm"></div>
     <div class="drawer-foot" style="flex-wrap:wrap;">
-      <button class="btn btn-primary" style="flex:1; min-width:150px;" onclick="r3FinSave(true)">ใส่ยอดเข้าบัญชีรถ</button>
+      <button class="btn btn-primary" style="flex-basis:100%; background:#157F3C; border-color:#157F3C;" id="r3FinGotBtn" onclick="r3FinMarkGot()">รับเงินแล้ว ✓</button>
+      <button class="btn btn-ghost" style="flex:1; min-width:150px;" onclick="r3FinSave(true)">ใส่ยอดเข้าบัญชีรถ</button>
       <button class="btn btn-ghost" onclick="r3FinSave(false)">บันทึกสถานะอย่างเดียว</button>
       <button class="btn btn-ghost" onclick="r3FinClose()">ปิด</button>
     </div>
@@ -3577,7 +3584,7 @@ function renderStock() {
   });
   rows.sort((a, b) => {
     const ka = a.d && a.d.key_slot ? a.d.key_slot : 999, kb = b.d && b.d.key_slot ? b.d.key_slot : 999;
-    return ka - kb || a.code.localeCompare(b.code, undefined, { numeric: true, sensitivity: 'base' });
+    return ((a.st === 'ขาย') - (b.st === 'ขาย')) || ka - kb || a.code.localeCompare(b.code, undefined, { numeric: true, sensitivity: 'base' });
   });
 
   const empty = document.getElementById('stockEmpty');
@@ -3911,6 +3918,7 @@ function renderRegistry() {
       <div class="meta">
         ${t.never ? '<span><span class="badge" style="background:#C97F0018; color:#C97F00;"><span class="dot"></span>ยังไม่เคยลงข้อมูลภาษี</span></span>' : `<span>ภาษีหมดอายุ ${r1FmtDmy(t.d.tax_expiry)} ${expiryBadge(t.d.tax_expiry)}</span>`}
         ${btn(t.never ? 'ลงข้อมูลภาษี' : 'อัปเดตวันหมดอายุภาษี', 'openTaxModal', t.code, t.never ? 'btn-primary' : '')}
+        ${r3DelBtn('tax', t.code)}
       </div>
     </div>`).join('') : '<div class="muted">ไม่มีรถที่ต้องต่อภาษีในช่วงนี้</div>';
 
@@ -3925,6 +3933,7 @@ function renderRegistry() {
         <span><b>${fmtMoney(x.d.deposit_amount)}</b> บาท</span>
         <span class="muted">${x.d.deposit_paid_date ? 'จ่ายเมื่อ ' + fmtDate(x.d.deposit_paid_date) + (x.days != null ? ' · ค้าง ' + x.days + ' วัน' : '') : 'ยังไม่ระบุวันที่จ่าย'}</span>
         ${btn('บันทึกได้คืน', 'openDepositModal', x.code, 'btn-primary')}
+        ${r3DelBtn('deposit', x.code)}
       </div>
     </div>`).join('') : '<div class="muted">ไม่มีเงินมัดจำเล่มที่รอคืน</div>';
 
@@ -3940,6 +3949,7 @@ function renderRegistry() {
       <div class="meta">
         ${btn('เปิดเช็กลิสต์', 'r1OpenDocs', x.code)}
         ${x.complete ? btn('ส่งแล้ววันนี้', 'r1MarkDocsSent', x.code, 'btn-primary') : ''}
+        ${r3DelBtn('docs', x.code)}
       </div>
     </div>`).join('') : '<div class="muted">ไม่มีรถที่รอส่งเอกสาร</div>';
 
@@ -3951,6 +3961,7 @@ function renderRegistry() {
     <div class="r1-row">
       <div class="main">${tag(x.code)}
         <div class="muted" style="margin-top:2px;">ยังไม่ได้ทำ: ${x.missing.map(escapeHtml).join(', ')}</div>
+        <div style="margin-top:6px;">${r3DelBtn('listing', x.code)}</div>
       </div>
       <div class="check-grid">${R1_LISTINGS.map(([k, l]) =>
         `<label><input type="checkbox" ${x.d[k] ? 'checked' : ''} data-code="${escapeHtml(x.code)}" data-key="${k}" onchange="r1ToggleListing(this.dataset.code, this.dataset.key, this.checked)">${l}</label>`).join('')}</div>
@@ -4210,7 +4221,7 @@ async function reloadR2Settings() {
     r2RenderAll();
   } catch (e) { r2Err('โหลดค่าตั้งค่าคอมไม่สำเร็จ: ', e); }
 }
-function reloadRound2() { reloadR2Bookings(); reloadR2Deliveries(); reloadR2Ledger(); reloadR2Settings(); if (typeof reloadR3 === 'function') reloadR3(); }
+function reloadRound2() { reloadR2Bookings(); reloadR2Deliveries(); reloadR2Ledger(); reloadR2Settings(); if (typeof reloadR3 === 'function') reloadR3(); if (typeof reloadR3Dismiss === 'function') reloadR3Dismiss(); }
 function subscribeRound2() {
   if (isEditor()) return;
   reloadRound2();
@@ -4220,6 +4231,7 @@ function subscribeRound2() {
     sb.channel('r2-settings-rt').on('postgres_changes', { event: '*', schema: 'public', table: 'r2_settings' }, () => reloadR2Settings()).subscribe();
   }
   if (typeof subscribeR3 === 'function') subscribeR3();
+  if (typeof subscribeR3Dismiss === 'function') subscribeR3Dismiss();
   if (isAdmin()) sb.channel('car-ledger-rt').on('postgres_changes', { event: '*', schema: 'public', table: 'car_ledger' }, () => reloadR2Ledger()).subscribe();
 }
 function setupRound2Nav() {
@@ -5735,7 +5747,7 @@ let r3Monthly = {};          // เดือน (YYYY-MM) -> แถวบัญ�
 let r3Notes = [];            // โน้ตเตือนฝ่ายบัญชี
 let r3OvMonth = null, r3AcMonth = null;
 let r3AcDirty = false, r3AcIncludePending = false;
-let r3FinCode = null;
+let r3FinCode = null, r3FinGot = false;
 
 /* ---------- โหลดข้อมูล + realtime ---------- */
 async function reloadR3() {
@@ -5836,8 +5848,10 @@ function r3FinOpen(code) {
   if (!isAdmin()) return;
   const r = r3FinRows().find(x => x.code === code);
   if (!r) return;
-  r3FinCode = code;
+  r3FinCode = code; r3FinGot = r.got;
   const L = r2Ledger[code] || {};
+  const gb = document.getElementById('r3FinGotBtn');
+  if (gb) { gb.textContent = r.got ? 'ยกเลิกรับเงิน (กลับเป็นรอรับเงิน)' : 'รับเงินแล้ว ✓'; gb.style.background = r.got ? '#C97F00' : '#157F3C'; gb.style.borderColor = r.got ? '#C97F00' : '#157F3C'; }
   document.getElementById('r3FinTitle').textContent = code + (r1Title(code) ? ' · ' + r1Title(code) : '');
   const F = (label, ctl, hint) => `<div class="field"><label>${label}</label>${ctl}${hint ? '<div class="hint">' + hint + '</div>' : ''}</div>`;
   const M = (id, v) => `<input type="text" id="r3f_${id}" inputmode="decimal" autocomplete="off" oninput="r1MoneyInput(this)" value="${escapeHtml(r1MoneyShown(v))}">`;
@@ -5855,6 +5869,26 @@ function r3FinOpen(code) {
 function r3FinStatusChange() {
   const st = document.getElementById('r3f_status'), d = document.getElementById('r3f_date');
   if (st && d && st.value === 'รับแล้ว' && !d.value.trim()) d.value = r1FmtDmy(r1TodayStr());
+}
+// ปุ่มล่างสุด: กดแล้วเปลี่ยนสถานะทันที (รับแล้ว ↔ รอรับเงิน) ไม่แตะยอดในบัญชีรถ
+async function r3FinMarkGot() {
+  if (!isAdmin() || !r3FinCode) return;
+  const code = r3FinCode;
+  const toGot = !r3FinGot;
+  let date = null;
+  if (toGot) {
+    const el = document.getElementById('r3f_date');
+    const pd = r1ParseDmy(el ? el.value : '');
+    if (!pd.ok) { showToast('วันที่ได้รับเงินไม่ถูกต้อง — พิมพ์เป็น วว/ดด/ปปปป', true); return; }
+    date = pd.iso || r1TodayStr();
+  }
+  try {
+    const { error } = await sb.from('car_ledger').upsert({ code, finance_status: toGot ? 'รับแล้ว' : 'รอรับเงิน', finance_received_date: date, updated_at: Date.now() }, { onConflict: 'code' });
+    if (error) throw error;
+    showToast(toGot ? 'รับเงินจากไฟแนนซ์แล้ว ' + code : 'กลับเป็นรอรับเงิน ' + code);
+    r3FinClose();
+    reloadR2Ledger();
+  } catch (e) { showToast('บันทึกไม่สำเร็จ: ' + e.message, true); }
 }
 function r3FinClose() { document.getElementById('r3FinOverlay').classList.remove('open'); r3FinCode = null; }
 async function r3FinSave(withAmounts) {
@@ -5885,7 +5919,7 @@ async function r3FinSave(withAmounts) {
 function r3AcCur() { return r3AcMonth || currentMonthKey(); }
 function r3AcMonthShift(d) { r3AcMonth = shiftMonthKey(r3AcCur(), d); r3AcDirty = false; r3RenderMonthly(true); }
 function r3AcMonthNow() { r3AcMonth = null; r3AcDirty = false; r3RenderMonthly(true); }
-// รายจ่ายประจำ: ใช้ของเดือนที่บันทึกไว้ ไม่มี → ยกมาจากเดือนก่อนหน้าล่าสุดที่บันทึก → ไม่มีอีก ใช้รายการตั้งต้น
+// Fix Cost: ใช้ของเดือนที่บันทึกไว้ ไม่มี → ยกมาจากเดือนก่อนหน้าล่าสุดที่บันทึก → ไม่มีอีก ใช้รายการตั้งต้น
 function r3FixedFor(mk) {
   const row = r3Monthly[mk];
   if (row && Array.isArray(row.fixed)) return { rows: row.fixed.map(x => ({ label: x.label, amount: x.amount })), carried: false };
@@ -5893,12 +5927,19 @@ function r3FixedFor(mk) {
   if (prev) return { rows: r3Monthly[prev].fixed.map(x => ({ label: x.label, amount: x.amount })), carried: prev };
   return { rows: R3_FIXED_DEFAULT.map(l => ({ label: l, amount: null })), carried: false };
 }
-function r3AcCalc(mk, fixed, extra, includePending) {
+// รายรับ = กำไรรถ (ปันผลแล้ว) + รายรับอื่น ๆ · สุทธิ = รายรับ − Fix Cost − ค่าใช้จ่ายระหว่างเดือน
+function r3AcCalc(mk, fixed, extra, includePending, income) {
   const D = r2MonthData(mk);
   const pendingEst = D.pending.reduce((s, r) => s + (r.c.hasPrice ? r.c.profit : 0), 0);
   const carProfit = D.profit + (includePending ? pendingEst : 0);
+  const otherIncome = r2ListSum(income);
   const fixedTotal = r2ListSum(fixed), extraTotal = r2ListSum(extra);
-  return { D, carProfit, pendingEst, fixedTotal, extraTotal, expense: fixedTotal + extraTotal, net: carProfit - fixedTotal - extraTotal };
+  const revenue = carProfit + otherIncome;
+  return { D, carProfit, pendingEst, otherIncome, revenue, fixedTotal, extraTotal, expense: fixedTotal + extraTotal, net: revenue - fixedTotal - extraTotal };
+}
+function r3RowCalc(mk) {
+  const row = r3Monthly[mk];
+  return r3AcCalc(mk, row ? (row.fixed || []) : [], row ? (row.extra || []) : [], r3AcIncludePending, row ? (row.income || []) : []);
 }
 function r3RenderMonthly(force) {
   const form = document.getElementById('r3AcForm');
@@ -5908,18 +5949,29 @@ function r3RenderMonthly(force) {
   if (!(r3AcDirty && !force)) {                       // กำลังพิมพ์อยู่ ไม่รีเฟรชทับ
     const fx = r3FixedFor(mk), row = r3Monthly[mk] || {};
     const extra = Array.isArray(row.extra) ? row.extra : [];
+    const income = Array.isArray(row.income) ? row.income : [];
+    const cb = 'r3AcDirty = true; r3AcPreview()';
     form.innerHTML = `
-      <div class="r1-form-section" style="border-top:none; padding-top:0;" oninput="r3AcDirty = true; r3AcPreview()">
-        <h4>รายจ่ายประจำ</h4>
+      <div class="r1-form-section" style="border-top:none; padding-top:0;" oninput="${cb}">
+        <h4>รายรับ</h4>
+        <div class="r2-sum-row"><span>กำไรจากการขายรถ (สรุปอัตโนมัติจากบัญชีต่อคัน)</span><span class="num" id="r3AcCarProfit">—</span></div>
+        <div class="muted" id="r3AcCarProfitSub" style="margin:2px 0 10px;"></div>
+        <label style="font-size:13px; font-weight:600;">รายรับจากจุดอื่น</label>
+        <div id="r3AcIncome" style="margin-top:6px;">${income.map(x => r2RowHtml(x.label, x.amount, cb, undefined, x.date || '')).join('')}</div>
+        <button type="button" class="btn btn-ghost btn-sm r2-add" onclick="r2AddRow('r3AcIncome', '${cb}', false, true)">+ เพิ่มแถวรายรับ</button>
+        <div class="r2-sum-row total" style="margin-top:8px;"><span>รวมรายรับจากจุดอื่น</span><span class="num" id="r3AcIncomeTotal">0</span></div>
+      </div>
+      <div class="r1-form-section" oninput="${cb}">
+        <h4>Fix Cost</h4>
         ${fx.carried ? `<div class="r2-info" style="margin-bottom:10px;">ยังไม่ได้บันทึกเดือนนี้ — ยกรายการและยอดมาจาก ${escapeHtml(monthKeyLabel(fx.carried))} แก้แล้วกด "บันทึก"</div>` : ''}
-        <div id="r3AcFixed">${fx.rows.map(x => r2RowHtml(x.label, x.amount, 'r3AcDirty = true; r3AcPreview()')).join('')}</div>
-        <button type="button" class="btn btn-ghost btn-sm r2-add" onclick="r2AddRow('r3AcFixed', 'r3AcDirty = true; r3AcPreview()')">+ เพิ่มแถว (เช่น เงินเดือนพนักงานอีกคน)</button>
+        <div id="r3AcFixed">${fx.rows.map(x => r2RowHtml(x.label, x.amount, cb)).join('')}</div>
+        <button type="button" class="btn btn-ghost btn-sm r2-add" onclick="r2AddRow('r3AcFixed', '${cb}')">+ เพิ่มแถว (เช่น เงินเดือนพนักงานอีกคน)</button>
         <div class="hint" style="margin-top:6px;">เงินเดือนเซลล์ใส่เฉพาะ <b>ฐานเงินเดือน</b> — ค่าคอมสเต็ปรวมอยู่ในต้นทุนรถแล้ว · "ดอกเบี้ยทุนนอก" แยกจากดอกเบี้ย 0.5%/เดือนในต้นทุนรถ ไม่ต้องใส่ซ้ำ</div>
       </div>
-      <div class="r1-form-section" oninput="r3AcDirty = true; r3AcPreview()">
+      <div class="r1-form-section" oninput="${cb}">
         <h4>ค่าใช้จ่ายระหว่างเดือน</h4>
-        <div id="r3AcExtra">${extra.map(x => r2RowHtml(x.label, x.amount, 'r3AcDirty = true; r3AcPreview()', undefined, x.date || '')).join('')}</div>
-        <button type="button" class="btn btn-ghost btn-sm r2-add" onclick="r2AddRow('r3AcExtra', 'r3AcDirty = true; r3AcPreview()', false, true)">+ เพิ่มแถว</button>
+        <div id="r3AcExtra">${extra.map(x => r2RowHtml(x.label, x.amount, cb, undefined, x.date || '')).join('')}</div>
+        <button type="button" class="btn btn-ghost btn-sm r2-add" onclick="r2AddRow('r3AcExtra', '${cb}', false, true)">+ เพิ่มแถว</button>
         <div class="r2-sum-row total" style="margin-top:8px;"><span>รวมค่าใช้จ่ายระหว่างเดือน</span><span class="num" id="r3AcExtraTotal">0</span></div>
       </div>
       <div class="r1-form-section"><div class="field"><label>หมายเหตุ</label><textarea id="r3AcNote" oninput="r3AcDirty = true">${escapeHtml(row.note || '')}</textarea></div>
@@ -5927,49 +5979,102 @@ function r3RenderMonthly(force) {
   }
   r3AcPreview();
   r3RenderHistory();
+  r3RenderPeriod();
 }
 function r3AcRead() {
-  const fixed = r2ReadRows('r3AcFixed'), extra = r2ReadRows('r3AcExtra');
-  return { fixed, extra, bad: extra.some(x => x.badDate) };
+  const fixed = r2ReadRows('r3AcFixed'), extra = r2ReadRows('r3AcExtra'), income = r2ReadRows('r3AcIncome');
+  return { fixed, extra, income, bad: extra.some(x => x.badDate) || income.some(x => x.badDate) };
 }
 function r3AcPreview() {
   const sum = document.getElementById('r3AcSummary');
   if (!sum) return;
   const mk = r3AcCur();
-  const { fixed, extra } = document.getElementById('r3AcFixed') ? r3AcRead() : { fixed: r3FixedFor(mk).rows, extra: (r3Monthly[mk] || {}).extra || [] };
-  const c = r3AcCalc(mk, fixed, extra, r3AcIncludePending);
-  const et = document.getElementById('r3AcExtraTotal'); if (et) et.textContent = r2M(c.extraTotal);
+  const saved = r3Monthly[mk] || {};
+  const { fixed, extra, income } = document.getElementById('r3AcFixed') ? r3AcRead() : { fixed: r3FixedFor(mk).rows, extra: saved.extra || [], income: saved.income || [] };
+  const c = r3AcCalc(mk, fixed, extra, r3AcIncludePending, income);
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set('r3AcExtraTotal', r2M(c.extraTotal)); set('r3AcIncomeTotal', r2M(c.otherIncome)); set('r3AcCarProfit', (c.carProfit >= 0 ? '' : '−') + r2M(Math.abs(c.carProfit)));
+  set('r3AcCarProfitSub', `ปันผลแล้ว ${c.D.settled.length} คัน${c.D.pending.length ? ` · รอปันผล ${c.D.pending.length} คัน (ประมาณ ${r2M(c.pendingEst)}${r3AcIncludePending ? ' — รวมแล้ว' : ' — ยังไม่รวม'})` : ''}`);
   sum.innerHTML = `<div class="r3-cards">
-    <div class="r3-card ${c.carProfit >= 0 ? 'pos' : 'neg'}"><div class="v">${c.carProfit >= 0 ? '' : '−'}${r2M(Math.abs(c.carProfit))}</div><div class="l">รายได้จากการขายรถ (กำไรรถ)</div><div class="s">ปันผลแล้ว ${c.D.settled.length} คัน${c.D.pending.length ? ` · รอปันผล ${c.D.pending.length} คัน (ประมาณ ${r2M(c.pendingEst)})` : ''}</div></div>
-    <div class="r3-card"><div class="v">${r2M(c.fixedTotal)}</div><div class="l">รายจ่ายประจำ</div></div>
+    <div class="r3-card ${c.revenue >= 0 ? 'pos' : 'neg'}"><div class="v">${c.revenue >= 0 ? '' : '−'}${r2M(Math.abs(c.revenue))}</div><div class="l">รายรับรวม</div><div class="s">กำไรรถ ${r2M(c.carProfit)} + รายรับอื่น ${r2M(c.otherIncome)}</div></div>
+    <div class="r3-card"><div class="v">${r2M(c.fixedTotal)}</div><div class="l">Fix Cost</div></div>
     <div class="r3-card"><div class="v">${r2M(c.extraTotal)}</div><div class="l">ค่าใช้จ่ายระหว่างเดือน</div></div></div>
     <div class="r3-card ${c.net >= 0 ? 'pos' : 'neg'}" style="margin-bottom:10px;"><div class="l">กำไร / ขาดทุนสุทธิ ${escapeHtml(monthKeyLabel(mk))}</div>
       <div class="r3-big ${c.net >= 0 ? 'r2-pos' : 'r2-neg'}">${c.net >= 0 ? '+' : '−'}${r2M(Math.abs(c.net))} บาท</div>
-      <div class="s">${c.net >= 0 ? 'กำไร' : 'ขาดทุน'} = กำไรรถ ${r3Pos(c.carProfit)} − รายจ่ายประจำ ${r2M(c.fixedTotal)} − ค่าใช้จ่ายระหว่างเดือน ${r2M(c.extraTotal)}</div></div>
-    <label style="display:flex; gap:8px; align-items:center; font-size:13px; margin-bottom:14px;"><input type="checkbox" ${r3AcIncludePending ? 'checked' : ''} onchange="r3AcIncludePending = this.checked; r3AcPreview(); r3RenderHistory();"> รวมประมาณการกำไรของรถที่ยังไม่กด "ปันผลแล้ว" (ปกตินับเฉพาะคันที่ปันผลแล้ว)</label>`;
+      <div class="s">${c.net >= 0 ? 'กำไร' : 'ขาดทุน'} = รายรับรวม ${r3Pos(c.revenue)} − Fix Cost ${r2M(c.fixedTotal)} − ค่าใช้จ่ายระหว่างเดือน ${r2M(c.extraTotal)}</div></div>
+    <label style="display:flex; gap:8px; align-items:center; font-size:13px; margin-bottom:14px;"><input type="checkbox" ${r3AcIncludePending ? 'checked' : ''} onchange="r3AcIncludePending = this.checked; r3AcPreview(); r3RenderHistory(); r3RenderPeriod();"> รวมประมาณการกำไรของรถที่ยังไม่กด "ปันผลแล้ว" (ปกตินับเฉพาะคันที่ปันผลแล้ว)</label>`;
 }
 function r3RenderHistory() {
   const box = document.getElementById('r3AcHistory');
   if (!box) return;
   const cur = r3AcCur();
-  let h = '<div class="r1-form-section"><h4>ย้อนหลัง 6 เดือน</h4><div class="table-wrap"><table><thead><tr><th>เดือน</th><th>กำไรรถ</th><th>รายจ่ายประจำ</th><th>ระหว่างเดือน</th><th>สุทธิ</th></tr></thead><tbody>';
+  let h = '<div class="r1-form-section"><h4>ย้อนหลัง 6 เดือน</h4><div class="table-wrap"><table><thead><tr><th>เดือน</th><th>รายรับรวม</th><th>Fix Cost</th><th>ระหว่างเดือน</th><th>สุทธิ</th></tr></thead><tbody>';
   for (let i = 0; i < 6; i++) {
-    const mk = shiftMonthKey(cur, -i), row = r3Monthly[mk];
-    const c = r3AcCalc(mk, row ? (row.fixed || []) : [], row ? (row.extra || []) : [], r3AcIncludePending);
-    h += `<tr onclick="r3AcMonth='${mk}'; r3AcDirty=false; r3RenderMonthly(true);"><td>${escapeHtml(monthKeyLabel(mk))}</td><td>${r3Pos(c.carProfit)}</td>` +
+    const mk = shiftMonthKey(cur, -i), row = r3Monthly[mk], c = r3RowCalc(mk);
+    h += `<tr onclick="r3AcMonth='${mk}'; r3AcDirty=false; r3RenderMonthly(true);"><td>${escapeHtml(monthKeyLabel(mk))}</td><td>${r3Pos(c.revenue)}</td>` +
       (row ? `<td>${r2M(c.fixedTotal)}</td><td>${r2M(c.extraTotal)}</td><td>${r3Pos(c.net)}</td>` : '<td class="muted" colspan="3">ยังไม่ได้บันทึกรายจ่ายเดือนนี้</td>') + '</tr>';
   }
   box.innerHTML = h + '</tbody></table></div></div>';
 }
+
+/* สรุปรายไตรมาส / รายปี */
+let r3PerMode = 'quarter', r3PerYear = null, r3PerQ = null;
+function r3PerInit() {
+  if (r3PerYear == null) { const mk = currentMonthKey(); r3PerYear = Number(mk.slice(0, 4)); r3PerQ = Math.floor((Number(mk.slice(5, 7)) - 1) / 3) + 1; }
+}
+function r3PerMonths() {
+  r3PerInit();
+  const pad = n => String(n).padStart(2, '0');
+  if (r3PerMode === 'year') return Array.from({ length: 12 }, (_, i) => r3PerYear + '-' + pad(i + 1));
+  return [0, 1, 2].map(i => r3PerYear + '-' + pad((r3PerQ - 1) * 3 + i + 1));
+}
+function r3PerShift(d) {
+  r3PerInit();
+  if (r3PerMode === 'year') r3PerYear += d;
+  else { r3PerQ += d; if (r3PerQ > 4) { r3PerQ = 1; r3PerYear++; } if (r3PerQ < 1) { r3PerQ = 4; r3PerYear--; } }
+  r3RenderPeriod();
+}
+function r3PerSetMode(m) { r3PerMode = m === 'year' ? 'year' : 'quarter'; r3RenderPeriod(); }
+function r3PerCalc() {
+  const months = r3PerMonths(), cur = currentMonthKey();
+  const rows = months.map(mk => ({ mk, saved: !!r3Monthly[mk], future: mk > cur, c: r3RowCalc(mk) }));
+  const t = { carProfit: 0, otherIncome: 0, revenue: 0, fixedTotal: 0, extraTotal: 0, net: 0 };
+  rows.forEach(r => { Object.keys(t).forEach(k => { t[k] += r.c[k]; }); });
+  return { rows, t, missing: rows.filter(r => !r.saved && !r.future).length };
+}
+function r3RenderPeriod() {
+  const box = document.getElementById('r3AcPeriod');
+  if (!box || !isAdmin()) return;
+  r3PerInit();
+  const P = r3PerCalc(), months = P.rows.map(r => r.mk);
+  const label = (r3PerMode === 'year' ? 'ปี ' + r3PerYear : 'ไตรมาส ' + r3PerQ + '/' + r3PerYear) + ' (' + monthKeyLabel(months[0]) + ' – ' + monthKeyLabel(months[months.length - 1]) + ')';
+  const t = P.t;
+  box.innerHTML = `<div class="r1-form-section"><h4>สรุปรายไตรมาส / รายปี</h4>
+    <div class="month-bar">
+      <select class="filter-select" id="r3PerMode" onchange="r3PerSetMode(this.value)"><option value="quarter"${r3PerMode === 'quarter' ? ' selected' : ''}>รายไตรมาส</option><option value="year"${r3PerMode === 'year' ? ' selected' : ''}>รายปี</option></select>
+      <button class="icon-btn" title="ก่อนหน้า" onclick="r3PerShift(-1)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <div class="month-label" style="min-width:260px;">${escapeHtml(label)}</div>
+      <button class="icon-btn" title="ถัดไป" onclick="r3PerShift(1)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    </div>
+    <div class="r3-cards">
+      <div class="r3-card ${t.revenue >= 0 ? 'pos' : 'neg'}"><div class="v">${t.revenue >= 0 ? '' : '−'}${r2M(Math.abs(t.revenue))}</div><div class="l">รายรับรวม</div><div class="s">กำไรรถ ${r2M(t.carProfit)} + รายรับอื่น ${r2M(t.otherIncome)}</div></div>
+      <div class="r3-card"><div class="v">${r2M(t.fixedTotal)}</div><div class="l">Fix Cost</div></div>
+      <div class="r3-card"><div class="v">${r2M(t.extraTotal)}</div><div class="l">ค่าใช้จ่ายระหว่างเดือน</div></div></div>
+    <div class="r3-card ${t.net >= 0 ? 'pos' : 'neg'}" style="margin-bottom:10px;"><div class="l">กำไร / ขาดทุนสุทธิ ${escapeHtml(label)}</div><div class="r3-big ${t.net >= 0 ? 'r2-pos' : 'r2-neg'}">${t.net >= 0 ? '+' : '−'}${r2M(Math.abs(t.net))} บาท</div></div>
+    ${P.missing ? `<div class="r2-info" style="margin-bottom:10px;">${P.missing} เดือนในช่วงนี้ยังไม่ได้บันทึกรายจ่าย — ยอดสุทธิรวมอาจสูงกว่าความเป็นจริง</div>` : ''}
+    <div class="table-wrap"><table><thead><tr><th>เดือน</th><th>กำไรรถ</th><th>รายรับอื่น</th><th>Fix Cost</th><th>ระหว่างเดือน</th><th>สุทธิ</th></tr></thead><tbody>` +
+    P.rows.map(r => `<tr class="${r.future ? 'muted' : ''}" onclick="r3AcMonth='${r.mk}'; r3AcDirty=false; r3RenderMonthly(true);"><td>${escapeHtml(monthKeyLabel(r.mk))}${r.future ? ' <span class="muted">(ยังไม่ถึง)</span>' : (r.saved ? '' : ' <span class="r2-flag">ยังไม่บันทึกรายจ่าย</span>')}</td><td>${r2M(r.c.carProfit)}</td><td>${r2M(r.c.otherIncome)}</td><td>${r2M(r.c.fixedTotal)}</td><td>${r2M(r.c.extraTotal)}</td><td>${r3Pos(r.c.net)}</td></tr>`).join('') +
+    `<tr class="total"><td><b>รวม</b></td><td><b>${r2M(t.carProfit)}</b></td><td><b>${r2M(t.otherIncome)}</b></td><td><b>${r2M(t.fixedTotal)}</b></td><td><b>${r2M(t.extraTotal)}</b></td><td>${r3Pos(t.net)}</td></tr></tbody></table></div></div>`;
+}
 async function r3AcSave() {
   if (!isAdmin()) return;
   const mk = r3AcCur();
-  const { fixed, extra, bad } = r3AcRead();
-  if (bad) { showToast('วันที่จ่ายของค่าใช้จ่ายระหว่างเดือนไม่ถูกต้อง — พิมพ์เป็น วว/ดด/ปปปป', true); return; }
-  extra.forEach(x => { delete x.badDate; });
+  const { fixed, extra, income, bad } = r3AcRead();
+  if (bad) { showToast('วันที่ในรายการไม่ถูกต้อง — พิมพ์เป็น วว/ดด/ปปปป', true); return; }
+  extra.forEach(x => { delete x.badDate; }); income.forEach(x => { delete x.badDate; });
   const note = (document.getElementById('r3AcNote').value || '').trim() || null;
   try {
-    const { error } = await sb.from('acct_monthly').upsert({ month: mk, fixed, extra, note, updated_at: Date.now() }, { onConflict: 'month' });
+    const { error } = await sb.from('acct_monthly').upsert({ month: mk, fixed, extra, income, note, updated_at: Date.now() }, { onConflict: 'month' });
     if (error) throw error;
     r3AcDirty = false;
     showToast('บันทึกบัญชี ' + monthKeyLabel(mk) + ' แล้ว');
@@ -6002,9 +6107,12 @@ function r3RenderAlerts() {
   const tr = r3TransferPending();
   const pend = r2PendingSoldCases();
   const tax = r1TaxItems(), dep = r1DepositItems(), lst = r1ListingItems();
+  const gaps = r3StockGaps();
   const docs = r1DocItems(), docsMissing = docs.filter(x => !x.complete), docsReady = docs.filter(x => x.complete);
   const row = (click, l, r) => `<div class="r3-alert-row" onclick="${click}"><span>${l}</span><span class="muted">${r}</span></div>`;
   let h = '';
+  h += r3AlertBlock(`รถในสต็อกที่ยังไม่ลงข้อมูล / ยังไม่จำนำ ${gaps.length} คัน`, gaps.length,
+    gaps.map(g => `<div class="r3-alert-row" data-code="${escapeHtml(g.code)}" onclick="openCarDrawer(this.dataset.code)"><span><b>${escapeHtml(g.code)}</b> ${escapeHtml(r1Title(g.code) || (r1Car(g.code) || {}).model || '')}</span><span class="muted">${g.reasons.join(' · ')}</span></div>`).join(''), gaps.some(g => g.noDetail));
   h += r3AlertBlock(`ฝ่ายบัญชี: ยังไม่ได้รับเงินจากไฟแนนซ์ ${finWait.length} คัน · ${r2M(finWait.reduce((s, r) => s + r.amount, 0))} บาท`, finWait.length,
     finWait.map(r => row(`switchTab('finrec')`, `<b>${escapeHtml(r.code)}</b> ${escapeHtml(r1Title(r.code))} · ${escapeHtml(r.fin || '—')}`, `${r.amount ? r2M(r.amount) + ' บาท · ' : ''}รอ ${r.days == null ? '—' : r.days} วัน`)).join(''), finWait.some(r => (r.days || 0) > 30));
   h += r3AlertBlock(`ฝ่ายบัญชี: ค่าโอนเก็บตามจริงที่ยังไม่ได้รับยอด ${tr.length} คัน`, tr.length,
@@ -6091,7 +6199,7 @@ function r3RenderOverview() {
   const card = (cls, v, l, s, click) => `<div class="r3-card ${cls || ''}"${click ? ` style="cursor:pointer;" onclick="${click}"` : ''}><div class="v">${v}</div><div class="l">${l}</div>${s ? '<div class="s">' + s + '</div>' : ''}</div>`;
   const depSum = o.deposit.reduce((s, x) => s + Number(x.d.deposit_amount || 0), 0);
   cards.innerHTML = `<h3 style="font-size:15px; margin:4px 0 8px;">สต็อก ณ ตอนนี้</h3><div class="r3-cards">
-      ${card('', o.stock.length + ' คัน', 'รถคงเหลือในสต็อก', `ว่าง ${o.free} · จอง ${o.booked}`, "switchTab('stock')")}
+      ${card('pos', o.free + ' คัน', 'รถว่าง ณ ปัจจุบัน', `จอง ${o.booked} · รวมในสต็อก ${o.stock.length} คัน`, "switchTab('stock')")}
       ${card('warn', r2M(o.sunk), 'ต้นทุนจมในสต็อก (บาท)', 'ต้นทุน ณ ปัจจุบัน รวมดอกเบี้ยที่คิดถึงวันนี้' + (o.noPrice ? ` · ยังไม่มีราคา ${o.noPrice} คัน` : ''), "switchTab('ledger')")}
       ${card(o.docsMissing ? 'warn' : '', o.docsMissing + ' คัน', 'รถเอกสารไม่ครบ', `ครบแล้วรอส่งคุณหญิง ${o.docsReady} คัน`, "switchTab('registry')")}
     </div>
@@ -6107,6 +6215,97 @@ function r3RenderOverview() {
   r3RenderNotes();
   function dep(x) { return x.deposit.length ? 'warn' : ''; }
 }
+
+
+/* รถในสต็อก (ยังไม่ขาย) ที่ยังไม่ลงข้อมูลรถเข้า / ยังไม่ระบุวันที่จำนำ / ยังไม่ลงราคา */
+function r3StockGaps() {
+  const out = [];
+  cars.forEach(c => {
+    if (r1Status(c.code) === 'ขาย') return;
+    const d = carDetails[c.code], pv = carPrivate[c.code] || {};
+    const reasons = [];
+    if (!d) reasons.push('ยังไม่ลงข้อมูลรถเข้า');
+    else {
+      if (!d.pledge_date) reasons.push('ยังไม่ระบุวันที่จำนำ');
+      if (pv.final_price == null && pv.purchase_price == null) reasons.push('ยังไม่ลงราคาซื้อ');
+    }
+    if (reasons.length) out.push({ code: c.code, reasons, noDetail: !d });
+  });
+  out.sort((a, b) => (b.noDetail - a.noDetail) || a.code.localeCompare(b.code, undefined, { numeric: true, sensitivity: 'base' }));
+  return out;
+}
+
+/* =====================================================================
+   ลบแจ้งเตือนในหน้างานทะเบียน (เฉพาะเจ้าของเต็นท์) — ไว้กรณีลงข้อมูลรถผิดแล้วแจ้งเตือนไม่หาย
+   เก็บเป็นรายการ "รถ + ชนิดแจ้งเตือน" ไม่แตะข้อมูลรถ · คืนค่าได้ท้ายหน้างานทะเบียน
+   ===================================================================== */
+let r3Dismiss = {};   // 'รหัสรถ|ชนิด' -> แถวในตาราง alert_dismiss
+const R3_KIND_LABEL = { tax: 'ภาษี', deposit: 'เงินมัดจำเล่ม', docs: 'เอกสารส่งคุณหญิง', listing: 'ลงขายยังไม่ครบ' };
+// ภาษี: ถ้าเปลี่ยนวันหมดอายุภายหลัง แจ้งเตือนกลับมาได้ (ผูกกับค่าวันหมดอายุตอนลบ) · ชนิดอื่นลบแล้วหายถาวรจนกว่าจะคืนค่า
+function r3IsDismissed(code, kind, ref) {
+  const x = r3Dismiss[code + '|' + kind];
+  if (!x) return false;
+  return kind === 'tax' ? String(x.ref || '') === String(ref || '') : true;
+}
+async function reloadR3Dismiss() {
+  if (!canEditStock()) return;
+  try {
+    const { data, error } = await sb.from('alert_dismiss').select('*');
+    if (error) throw error;
+    r3Dismiss = {};
+    (data || []).forEach(r => { r3Dismiss[r.code + '|' + r.kind] = r; });
+    renderRegistry();
+    if (isAdmin()) { r3RenderOverview(); }
+  } catch (e) { /* ยังไม่ได้รัน round3_setup.sql — ใช้งานส่วนอื่นต่อได้ */ }
+}
+function subscribeR3Dismiss() {
+  if (!canEditStock()) return;
+  sb.channel('r3-dismiss-rt').on('postgres_changes', { event: '*', schema: 'public', table: 'alert_dismiss' }, () => reloadR3Dismiss()).subscribe();
+}
+function r3DelBtn(kind, code) {
+  if (!isAdmin()) return '';
+  return `<button class="btn btn-ghost btn-sm" style="color:var(--danger);" data-code="${escapeHtml(code)}" data-kind="${kind}" onclick="event.stopPropagation(); r3DismissAsk(this.dataset.code, this.dataset.kind)">ลบแจ้งเตือน</button>`;
+}
+function r3DismissAsk(code, kind) {
+  if (!isAdmin()) return;
+  openConfirm('ลบแจ้งเตือน?', `ลบแจ้งเตือน "${R3_KIND_LABEL[kind] || kind}" ของรถ ${code} — ใช้เมื่อลงข้อมูลรถผิดแล้วแจ้งเตือนไม่หาย (ไม่ลบข้อมูลรถ) · คืนค่าได้ที่ท้ายหน้านี้`, async () => {
+    const d = carDetails[code] || {};
+    const rec = { code, kind, ref: kind === 'tax' ? (d.tax_expiry || '') : '', created_at: Date.now(), created_by: session.username };
+    try {
+      const { error } = await sb.from('alert_dismiss').upsert(rec, { onConflict: 'code,kind' });
+      if (error) throw error;
+      r3Dismiss[code + '|' + kind] = rec;
+      showToast('ลบแจ้งเตือนแล้ว');
+      renderRegistry(); r3RenderOverview();
+    } catch (e) { showToast('ลบแจ้งเตือนไม่สำเร็จ: ' + e.message, true); }
+  });
+}
+async function r3DismissRestore(code, kind) {
+  if (!isAdmin()) return;
+  try {
+    const { error } = await sb.from('alert_dismiss').delete().eq('code', code).eq('kind', kind);
+    if (error) throw error;
+    delete r3Dismiss[code + '|' + kind];
+    showToast('คืนแจ้งเตือนแล้ว');
+    renderRegistry(); r3RenderOverview();
+  } catch (e) { showToast('คืนค่าไม่สำเร็จ: ' + e.message, true); }
+}
+function r3RenderDismissList() {
+  const sec = document.getElementById('r3DismissSec'), box = document.getElementById('r3DismissList');
+  if (!sec || !box) return;
+  const list = Object.values(r3Dismiss);
+  sec.classList.toggle('hidden', !isAdmin() || !list.length);
+  if (!isAdmin()) return;
+  document.getElementById('r3DismissCount').textContent = list.length;
+  box.innerHTML = list.map(x => `<div class="r1-row"><div class="main"><span class="code-badge">${escapeHtml(x.code)}</span> <span style="margin-left:8px;">${escapeHtml(r1Title(x.code))}</span> <span class="muted">· ${escapeHtml(R3_KIND_LABEL[x.kind] || x.kind)}</span></div>
+    <div class="meta"><button class="btn btn-ghost btn-sm" data-code="${escapeHtml(x.code)}" data-kind="${escapeHtml(x.kind)}" onclick="r3DismissRestore(this.dataset.code, this.dataset.kind)">คืนแจ้งเตือน</button></div></div>`).join('');
+}
+// ซ่อนรายการที่ถูกลบแจ้งเตือน ทั้งในหน้างานทะเบียน ภาพรวมร้าน และตัวเลขแจ้งเตือนอื่น ๆ
+r1TaxItems = (f => () => f().filter(x => !r3IsDismissed(x.code, 'tax', x.d && x.d.tax_expiry)))(r1TaxItems);
+r1DepositItems = (f => () => f().filter(x => !r3IsDismissed(x.code, 'deposit')))(r1DepositItems);
+r1DocItems = (f => () => f().filter(x => !r3IsDismissed(x.code, 'docs')))(r1DocItems);
+r1ListingItems = (f => () => f().filter(x => !r3IsDismissed(x.code, 'listing')))(r1ListingItems);
+renderRegistry = (f => function () { f(); r3RenderDismissList(); })(renderRegistry);
 
 boot();
 </script>
