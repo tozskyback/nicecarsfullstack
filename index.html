@@ -785,6 +785,7 @@
             <option value="ว่าง">ว่าง</option>
             <option value="จอง">จอง</option>
             <option value="ขาย">ขายแล้ว</option>
+            <option value="ปันผล">ปันผล</option>
           </select>
         </div>
         <div class="table-wrap">
@@ -949,6 +950,7 @@
           <select class="filter-select" id="r2LedgerFilter" onchange="r2RenderLedger()">
             <option value="instock">รถที่ยังไม่ขาย</option>
             <option value="sold">รถขายแล้ว</option>
+            <option value="payout">รถปันผล (ไม่นับกำไร)</option>
             <option value="all">ทั้งหมด</option>
             <option value="month">สรุปรายเดือน</option>
           </select>
@@ -1516,7 +1518,7 @@ function roleLabel(role) { return role === 'admin' ? 'แอดมิน' : role
 
 /* ---------------- Row <-> App object mapping ---------------- */
 function rowToUser(r) { return { username: r.username, displayName: r.display_name, role: r.role, passwordHash: r.password_hash, createdAt: r.created_at }; }
-function rowToCar(r) { return { id: r.code, code: r.code, model: r.model, sold: !!r.sold, soldCaseId: r.sold_case_id }; }
+function rowToCar(r) { return { id: r.code, code: r.code, model: r.model, sold: !!r.sold, soldCaseId: r.sold_case_id, payout: !!r.payout_closed }; }
 function rowToBroker(r) { return { id: r.code, code: r.code, nickname: r.nickname, fullName: r.full_name, phone: r.phone }; }
 function rowToVideo(r) {
   return {
@@ -2346,7 +2348,7 @@ function renderCarList() {
       <div>
         <span class="code-badge">${escapeHtml(c.code)}</span>
         <span style="margin-left:10px; font-size:13.5px;">${escapeHtml(c.model)}</span>
-        ${tag}
+        ${tag}${c.payout ? '<span class="car-tag" style="color:#7C3AED; background:#EFE7FD;">ปันผล</span>' : ''}
       </div>
       <div style="display:flex; gap:8px; align-items:center;">
         ${isAdmin() ? `<button class="btn btn-ghost btn-sm" onclick="toggleCarSold('${c.code}')">${c.sold ? 'ยกเลิกขายแล้ว' : 'ทำเครื่องหมายขายแล้ว'}</button>` : ''}
@@ -2367,7 +2369,7 @@ async function toggleCarSold(code) {
   if (!car) return;
   const newSold = !car.sold;
   try {
-    const { error } = await sb.from('cars').update({ sold: newSold, sold_case_id: null }).eq('code', code);
+    const { error } = await sb.from('cars').update(newSold ? { sold: true, sold_case_id: null } : { sold: false, sold_case_id: null, payout_closed: false }).eq('code', code);
     if (error) throw error;
     showToast(newSold ? 'ทำเครื่องหมาย ' + code + ' เป็นขายแล้ว' : 'ยกเลิกสถานะขายแล้วของ ' + code);
     reloadCars();
@@ -3197,7 +3199,7 @@ const R1_LISTINGS = [
   ['list_one2car', 'One2Car'], ['list_taladrod', 'ตลาดรถ'], ['list_line', 'Line'],
   ['list_photos', 'ถ่ายรูป'], ['list_inspect', 'ตรวจรถ'],
 ];
-const R1_STATUS_COLOR = { 'ว่าง': '#157F3C', 'จอง': '#C97F00', 'ขาย': '#6B7280' };
+const R1_STATUS_COLOR = { 'ว่าง': '#157F3C', 'จอง': '#C97F00', 'ขาย': '#6B7280', 'ปันผล': '#7C3AED' };
 
 let carDetails = {};     // code -> แถวจากตาราง car_details
 let carPrivate = {};     // code -> แถวจากตาราง car_private (แอดมินเท่านั้น)
@@ -3304,6 +3306,10 @@ function r1DaysUntil(s) {
 }
 function r1DaysSince(s) { const d = r1DaysUntil(s); return d === null ? null : -d; }
 function r1Car(code) { return cars.find(c => c.code === code); }
+/* รถ "ปันผล" = รถเก่าก่อนเริ่มเก็บข้อมูลใหม่ (เดือน 9) · ปิดแล้วเหมือนขายแล้ว แต่ไม่นับในกำไร/ค่าคอม/ยอดรายเดือน */
+const R1_NEW_DATA_START = '2026-09';
+function r1IsPayout(code) { const c = r1Car(code); return !!(c && c.payout); }
+function r1PayoutMonthKey() { return shiftMonthKey(R1_NEW_DATA_START, -1); }
 function r1Status(code) {
   const c = r1Car(code);
   if (c && c.sold) return 'ขาย';
@@ -3320,6 +3326,7 @@ function r1Title(code) {
 let r1StockMonthKey = null;
 function r1CurStockMonth() { if (!r1StockMonthKey) r1StockMonthKey = currentMonthKey(); return r1StockMonthKey; }
 function r1SoldMonthKey(code) {
+  if (r1IsPayout(code)) return r1PayoutMonthKey();   // รถปันผลอยู่เดือนก่อนเริ่มเก็บข้อมูลใหม่ ไม่โผล่เดือน 9 ขึ้นไป
   const d = carDetails[code], c = r1Car(code);
   if (d && d.sold_date) return String(d.sold_date).slice(0, 7);
   const r2dv = (typeof r2DeliveryByCar === 'function') ? r2DeliveryByCar(code) : null;
@@ -3550,10 +3557,10 @@ function renderStock() {
   const month = r1CurStockMonth();
   const isCurrent = month === curKey;
   const all = cars.map(c => {
-    const st = r1Status(c.code);
-    return { code: c.code, d: carDetails[c.code] || null, st, mk: st === 'ขาย' ? r1SoldMonthKey(c.code) : curKey };
+    const st = r1IsPayout(c.code) ? 'ปันผล' : r1Status(c.code);
+    return { code: c.code, d: carDetails[c.code] || null, st, mk: (st === 'ขาย' || st === 'ปันผล') ? r1SoldMonthKey(c.code) : curKey };
   }).filter(r => r.mk === month);
-  const cnt = { ว่าง: 0, จอง: 0, ขาย: 0 };
+  const cnt = { ว่าง: 0, จอง: 0, ขาย: 0, ปันผล: 0 };
   all.forEach(r => { cnt[r.st]++; });
   const slotsUsed = Object.keys(r1UsedSlots(null)).length;
   document.getElementById('stockMonthLabel').textContent = monthKeyLabel(month);
@@ -3570,10 +3577,11 @@ function renderStock() {
     <div class="stat-card"><div class="num">${slotsUsed}/${R1_KEY_SLOTS}</div><div class="lbl">กุญแจที่ใช้</div></div>
   ` : `
     <div class="stat-card"><div class="num" style="color:${R1_STATUS_COLOR['ขาย']}">${cnt['ขาย']}</div><div class="lbl">ขายแล้วในเดือนนี้</div></div>
+    ${cnt['ปันผล'] ? `<div class="stat-card"><div class="num" style="color:${R1_STATUS_COLOR['ปันผล']}">${cnt['ปันผล']}</div><div class="lbl">ปันผล (ไม่นับในยอดกำไร)</div></div>` : ''}
   `;
 
   let rows = all.filter(r => {
-    if (statusF === 'instock' && r.st === 'ขาย') return false;
+    if (statusF === 'instock' && (r.st === 'ขาย' || r.st === 'ปันผล')) return false;
     if (statusF && statusF !== 'instock' && statusF !== 'all' && r.st !== statusF) return false;
     if (search) {
       const d = r.d || {};
@@ -3584,7 +3592,7 @@ function renderStock() {
   });
   rows.sort((a, b) => {
     const ka = a.d && a.d.key_slot ? a.d.key_slot : 999, kb = b.d && b.d.key_slot ? b.d.key_slot : 999;
-    return ((a.st === 'ขาย') - (b.st === 'ขาย')) || ka - kb || a.code.localeCompare(b.code, undefined, { numeric: true, sensitivity: 'base' });
+    return (((a.st === 'ขาย' || a.st === 'ปันผล') ? 1 : 0) - ((b.st === 'ขาย' || b.st === 'ปันผล') ? 1 : 0)) || ka - kb || a.code.localeCompare(b.code, undefined, { numeric: true, sensitivity: 'base' });
   });
 
   const empty = document.getElementById('stockEmpty');
@@ -3666,7 +3674,7 @@ const R1_SECTIONS = [
   { id: 'stock', title: 'สต็อก / ลงขาย', access: 'all', fields: [
     { k: 'key_slot', label: 'รหัสกุญแจ (1-25)', type: 'slot', half: true },
     { k: 'sale_price', label: 'ราคาขาย (บาท)', type: 'money', half: true },
-    { k: 'stock_status', label: 'สถานะ', type: 'select', options: ['ว่าง', 'จอง', 'ขาย'], def: 'ว่าง', hint: 'เฉพาะเจ้าของเต็นท์แก้ได้ · รถเป็น “ขาย” เมื่อเจ้าของคอนเฟิร์มจากเคสขายแล้ว' },
+    { k: 'stock_status', label: 'สถานะ', type: 'select', options: ['ว่าง', 'จอง', 'ขาย', 'ปันผล'], def: 'ว่าง', hint: 'เฉพาะเจ้าของเต็นท์แก้ได้ · รถเป็น “ขาย” เมื่อเจ้าของคอนเฟิร์มจากเคสขายแล้ว' },
     { k: 'sold_date', label: 'วันที่ขาย (ถ้าขายแล้ว)', type: 'dmy', hint: 'เว้นว่างได้ ระบบใช้วันที่ตั้งสถานะเป็น "ขาย" · ใช้จัดรถเข้าเดือนที่ขายในหน้าสต็อก' },
     { k: '_listings', label: 'เช็กลิสต์การลงขาย', type: 'checks' },
   ]},
@@ -3744,7 +3752,7 @@ function r1RenderForm(code) {
   const staff = canEditStock();
   const ro = !staff;
   const v = Object.assign(r1Defaults(), code ? (carDetails[code] || {}) : {}, (isAdmin() && code && carPrivate[code]) ? carPrivate[code] : {});
-  if (code) v.stock_status = r1Status(code);
+  if (code) v.stock_status = r1IsPayout(code) ? 'ปันผล' : r1Status(code);
   let html = '';
   R1_SECTIONS.forEach(sec => {
     if (sec.access === 'staff' && !staff) return;
@@ -3833,8 +3841,10 @@ async function saveCarDrawer() {
   const form = r1CollectForm();
   if (form.err) { showToast(form.err, true); return; }
   const d = form.d;
-  if (!isAdmin()) { d.stock_status = r1Status(code); d.sold_date = (carDetails[code] || {}).sold_date || null; }   // ฝ่ายอื่นแก้สถานะสต็อกไม่ได้ คงค่าเดิมไว้
+  if (!isAdmin()) { d.stock_status = r1IsPayout(code) ? 'ปันผล' : r1Status(code); d.sold_date = (carDetails[code] || {}).sold_date || null; }   // ฝ่ายอื่นแก้สถานะสต็อกไม่ได้ คงค่าเดิมไว้
   d.stock_status = d.stock_status || 'ว่าง';
+  form.payout = d.stock_status === 'ปันผล';
+  if (form.payout) d.stock_status = 'ขาย';   // ปันผล = ขายแล้วที่ไม่นับกำไร (เก็บสถานะในตารางรถเป็นขาย + payout_closed)
   if (d.stock_status === 'ขาย') d.key_slot = null;   // ขายแล้ว เอาเลขกุญแจออก
 
   if (d.key_slot && d.stock_status !== 'ขาย') {
@@ -3869,15 +3879,18 @@ async function r1Persist(code, form) {
   try {
     const composed = [d.brand, d.model_name, d.sub_model, d.year_reg || d.year_made, d.plate].filter(Boolean).join(' ');   // ตามด้วยเลขทะเบียน
     const car = r1Car(code);
-    if (!r1EditingCode && car && car.sold && d.stock_status !== 'ขาย') d.stock_status = 'ขาย';   // รหัสนี้ขายไปแล้ว ไม่ให้ลงข้อมูลย้อนแล้วกลายเป็นว่าง
+    if (!r1EditingCode && car && car.sold && d.stock_status !== 'ขาย') { d.stock_status = 'ขาย'; form.payout = !!car.payout; }   // รหัสนี้ขายไปแล้ว ไม่ให้ลงข้อมูลย้อนแล้วกลายเป็นว่าง
     const newSold = d.stock_status === 'ขาย';
+    const newPayout = newSold && !!form.payout;
     if (!car) {
-      const { error } = await sb.from('cars').insert({ code, model: composed || code, sold: newSold });
+      const ins = { code, model: composed || code, sold: newSold }; if (newPayout) ins.payout_closed = true;
+      const { error } = await sb.from('cars').insert(ins);
       if (error) throw error;
     } else {
       const patch = {};
       if (composed && composed !== car.model) patch.model = composed;
       if (newSold !== car.sold) { patch.sold = newSold; if (!newSold) patch.sold_case_id = null; }
+      if (newPayout !== !!car.payout) patch.payout_closed = newPayout;
       if (Object.keys(patch).length) {
         const { error } = await sb.from('cars').update(patch).eq('code', code);
         if (error) throw error;
@@ -4272,7 +4285,7 @@ function r2StepsOf(dv) {
 function r2MonthSteps(username, mk) {
   let t = 0;
   Object.values(r2Deliveries).forEach(dv => {
-    if (r2SalesOf(dv) === username && dv.delivery_date && String(dv.delivery_date).slice(0, 7) === mk) t += r2StepsOf(dv).steps;
+    if (r2SalesOf(dv) === username && dv.delivery_date && String(dv.delivery_date).slice(0, 7) === mk && !r1IsPayout(dv.car_code)) t += r2StepsOf(dv).steps;
   });
   return t;
 }
@@ -4342,7 +4355,7 @@ function renderR2Comm() {
   }
   const salesF = isAdmin() ? document.getElementById('r2CommSales').value : '';
   const list = Object.values(r2Deliveries).filter(dv =>
-    r2Own(dv) && dv.delivery_date && String(dv.delivery_date).slice(0, 7) === mk && (!salesF || r2SalesOf(dv) === salesF));
+    r2Own(dv) && !r1IsPayout(dv.car_code) && dv.delivery_date && String(dv.delivery_date).slice(0, 7) === mk && (!salesF || r2SalesOf(dv) === salesF));
   list.sort((a, b) => String(a.delivery_date).localeCompare(String(b.delivery_date)) || r2CaseCodeOf(a).localeCompare(r2CaseCodeOf(b), undefined, { numeric: true }));
 
   const bySales = {};
@@ -5136,12 +5149,12 @@ function r2RenderLedger() {
   const f = document.getElementById('r2LedgerFilter').value;
   const mbar = document.getElementById('r2LedgerMonthBar');
   if (mbar) mbar.classList.toggle('hidden', f !== 'month');
-  const all = cars.map(c => ({ code: c.code, st: r1Status(c.code), c: r2CostOf(c.code) }));
+  const all = cars.map(c => ({ code: c.code, st: r1IsPayout(c.code) ? 'ปันผล' : r1Status(c.code), c: r2CostOf(c.code) }));
   let stockCost = 0, stockCnt = 0, noPrice = 0;
-  all.forEach(r => { if (r.st !== 'ขาย') { stockCnt++; if (r.c.hasPrice) stockCost += r.c.cost; else noPrice++; } });
+  all.forEach(r => { if (r.st !== 'ขาย' && r.st !== 'ปันผล') { stockCnt++; if (r.c.hasPrice) stockCost += r.c.cost; else noPrice++; } });
   document.getElementById('r2LedgerSub').textContent = 'ต้นทุนรวมรถที่ยังไม่ขาย ' + r2M(stockCost) + ' บาท (' + stockCnt + ' คัน' + (noPrice ? ' · ยังไม่มีราคาซื้อ ' + noPrice + ' คัน ไม่นับรวม' : '') + ')';
   if (f === 'month') { r2RenderLedgerMonth(body); return; }
-  let rows = all.filter(r => f === 'all' ? true : f === 'sold' ? r.st === 'ขาย' : r.st !== 'ขาย');
+  let rows = all.filter(r => f === 'all' ? true : f === 'sold' ? r.st === 'ขาย' : f === 'payout' ? r.st === 'ปันผล' : (r.st !== 'ขาย' && r.st !== 'ปันผล'));
   if (search) rows = rows.filter(r => [r.code, r1Title(r.code), (carDetails[r.code] || {}).plate].join(' ').toLowerCase().includes(search));
   if (!rows.length) { body.innerHTML = '<div class="empty-state"><div class="big">ไม่มีรถในมุมมองนี้</div></div>'; return; }
   body.innerHTML = `<table><thead><tr><th>รหัสรถ</th><th>รถ</th><th>สถานะ</th><th>ต้นทุน ณ ปัจจุบัน</th><th>รายรับ</th><th>กำไร/ขาดทุน</th><th>ข้อสังเกต</th><th></th></tr></thead><tbody>` +
@@ -5444,9 +5457,9 @@ function r2PendingMonthOf(code) {
   return r1SoldMonthKey(code) || currentMonthKey();
 }
 function r2MonthData(mk) {
-  const settled = Object.values(r2Ledger).filter(x => x.settled && x.settled_date && String(x.settled_date).slice(0, 7) === mk)
+  const settled = Object.values(r2Ledger).filter(x => !r1IsPayout(x.code) && x.settled && x.settled_date && String(x.settled_date).slice(0, 7) === mk)
     .sort((a, b) => String(a.settled_date).localeCompare(String(b.settled_date)));
-  const pending = cars.filter(c => r1Status(c.code) === 'ขาย' && !(r2Ledger[c.code] && r2Ledger[c.code].settled) && r2PendingMonthOf(c.code) === mk)
+  const pending = cars.filter(c => r1Status(c.code) === 'ขาย' && !c.payout && !(r2Ledger[c.code] && r2Ledger[c.code].settled) && r2PendingMonthOf(c.code) === mk)
     .map(c => ({ code: c.code, c: r2CostOf(c.code) }));
   const profit = settled.reduce((a, x) => a + (Number(x.settled_profit) || 0), 0);
   const income = settled.reduce((a, x) => a + (Number(x.settled_income) || 0), 0);
@@ -5629,7 +5642,7 @@ async function r2ApplySoldConfirm(carCode, caseId, deliveredIso) {
 async function r2RevertSoldConfirm(carCode, caseId) {
   const car = cars.find(c => c.code === carCode);
   if (car && car.sold && (!car.soldCaseId || String(car.soldCaseId) === String(caseId))) {
-    const { error } = await sb.from('cars').update({ sold: false, sold_case_id: null }).eq('code', carCode);
+    const { error } = await sb.from('cars').update({ sold: false, sold_case_id: null, payout_closed: false }).eq('code', carCode);
     if (error) throw error;
     if (carDetails[carCode] && carDetails[carCode].stock_status === 'ขาย') {
       const { error: e2 } = await sb.from('car_details').update({ stock_status: 'ว่าง', sold_date: null, updated_at: Date.now() }).eq('code', carCode);
@@ -5795,7 +5808,7 @@ function r3FinRows() {
   const today = r1TodayStr();
   const out = [];
   Object.values(r2Deliveries).forEach(dv => {
-    if (dv.buy_type !== 'ไฟแนนซ์' || !dv.car_code) return;
+    if (dv.buy_type !== 'ไฟแนนซ์' || !dv.car_code || r1IsPayout(dv.car_code)) return;
     if (r2DeliveryByCar(dv.car_code) !== dv) return;               // ใบส่งมอบเก่าของรถคันเดียวกัน ไม่นับซ้ำ
     const L = r2Ledger[dv.car_code] || {};
     const got = L.finance_status === 'รับแล้ว';
@@ -6108,7 +6121,7 @@ async function r3AcSave() {
 function r3TransferPending() {
   const out = [];
   Object.values(r2Deliveries).forEach(dv => {
-    if (dv.transfer_mode !== 'ตามจริง' || !dv.car_code || r2DeliveryByCar(dv.car_code) !== dv) return;
+    if (dv.transfer_mode !== 'ตามจริง' || !dv.car_code || r1IsPayout(dv.car_code) || r2DeliveryByCar(dv.car_code) !== dv) return;
     const L = r2Ledger[dv.car_code] || {};
     if (L.transfer_status === 'เก็บเงินแล้ว') return;
     out.push({ code: dv.car_code, caseCode: dv.case_code || '', delivered: dv.delivery_date, actual: L.transfer_actual, sales: dv.sales_username });
@@ -6199,7 +6212,7 @@ function r3OverviewData(mk) {
   const free = stock.filter(d => r1Status(d.code) === 'ว่าง').length, booked = stock.filter(d => r1Status(d.code) === 'จอง').length;
   let sunk = 0, noPrice = 0;
   stock.forEach(d => { const c = r2CostOf(d.code); if (c.hasPrice) sunk += c.cost; else noPrice++; });
-  const dvs = Object.values(r2Deliveries).filter(dv => dv.delivery_date && String(dv.delivery_date).slice(0, 7) === mk && dv.car_code && r2DeliveryByCar(dv.car_code) === dv);
+  const dvs = Object.values(r2Deliveries).filter(dv => dv.delivery_date && String(dv.delivery_date).slice(0, 7) === mk && dv.car_code && !r1IsPayout(dv.car_code) && r2DeliveryByCar(dv.car_code) === dv);
   const salesAmt = dvs.reduce((s, dv) => s + (Number(dv.sold_price) || 0), 0);
   const D = r2MonthData(mk);
   const row = r3Monthly[mk];
