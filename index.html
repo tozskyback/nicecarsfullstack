@@ -3283,7 +3283,7 @@ function r1ParseDmy(str) {
   return { ok: true, iso: yy + '-' + String(mm).padStart(2, '0') + '-' + String(dd).padStart(2, '0') };
 }
 /* วันที่จำนำ: ถ้าไม่ระบุ ให้นับเป็นวันเดียวกับวันที่รถเข้า */
-function r1PledgeDate(d) { return (d && (d.pledge_date || d.received_date)) || null; }
+function r1PledgeDate(d) { if (d && d.book_status === 'ฝากขาย') return null; return (d && (d.pledge_date || d.received_date)) || null; }   // ฝากขาย ไม่มีวันที่จำนำ
 function r1WarrantyHtml(iso) {
   const days = r1DaysUntil(iso);
   if (days === null || days < 0) return '<span class="muted">—</span>';   // ไม่มี หรือหมดอายุแล้ว = ไม่แสดง
@@ -3704,7 +3704,7 @@ const R1_SECTIONS = [
   ]},
   { id: 'buy', title: 'ซื้อรถเข้า', access: 'staff', fields: [
     { k: 'received_date', label: 'วันที่รถเข้า', type: 'dmy', half: true },
-    { k: 'pledge_date', label: 'วันที่จำนำ', type: 'dmy', half: true, hint: 'ถ้าไม่ระบุ นับเป็นวันเดียวกับวันที่รถเข้า' },
+    { k: 'pledge_date', label: 'วันที่จำนำ', type: 'dmy', half: true, nonconsign: true, hint: 'ถ้าไม่ระบุ นับเป็นวันเดียวกับวันที่รถเข้า' },
     { k: 'purchase_channel', label: 'ช่องทาง' },
     { k: 'final_price', label: 'ราคาที่จบ (บาท)', type: 'money', priv: true, hint: 'ราคาถึงลูกค้า + ค่าคอม (คำนวณให้อัตโนมัติ · กรอกเองได้ ถ้าไม่เท่ากันจะมีแจ้งเตือน) · ใช้เป็นฐานของยอดจำนำ' },
     { k: 'purchase_price', label: 'ราคาถึงลูกค้า (บาท)', type: 'money', half: true, priv: true },
@@ -3807,7 +3807,7 @@ function r1FieldHtml(f, v, ro, code) {
     const extra = t === 'number' ? ' inputmode="decimal" step="any"' : '';
     ctl = `<input type="${t}" id="${id}" value="${escapeHtml(val)}"${f.list ? ` list="${f.list}"` : ''}${extra}${f.k === 'closing_finance' ? ' oninput="r1UpdateVisibility()" autocomplete="off"' : ''}${dis}>`;
   }
-  return `<div class="field${f.closing ? ' r1-closing-only' : ''}"><label>${f.label}</label>${ctl}${f.hint ? `<div class="hint">${f.hint}</div>` : ''}</div>`;
+  return `<div class="field${f.closing ? ' r1-closing-only' : ''}${f.nonconsign ? ' r1-nonconsign-only' : ''}"><label>${f.label}</label>${ctl}${f.hint ? `<div class="hint">${f.hint}</div>` : ''}</div>`;
 }
 
 function r1RenderForm(code) {
@@ -3916,7 +3916,7 @@ async function saveCarDrawer() {
     if (used[d.key_slot]) { showToast('รหัสกุญแจ ' + d.key_slot + ' ถูกใช้โดยรถ ' + used[d.key_slot] + ' อยู่แล้ว', true); return; }
   }
   if (d.book_status !== 'ปิดไฟแนนซ์') { d.deposit_amount = null; d.deposit_paid_date = null; d.deposit_status = null; d.deposit_returned_date = null; d.deposit_returned_amount = null; }   // ซื้อสด/ฝากขาย: ไม่มีเงินมัดจำเล่ม
-  if (d.book_status === 'ฝากขาย') { d.docs_sent_date = null; ['doc_contract', 'doc_book', 'doc_house', 'doc_id', 'doc_transfer', 'doc_poa'].forEach(k => { d[k] = 'ยังไม่มี'; }); d.doc_note = null; }   // ฝากขาย: ไม่มีเอกสารส่งคุณหญิง
+  if (d.book_status === 'ฝากขาย') { d.pledge_date = null; d.docs_sent_date = null; ['doc_contract', 'doc_book', 'doc_house', 'doc_id', 'doc_transfer', 'doc_poa'].forEach(k => { d[k] = 'ยังไม่มี'; }); d.doc_note = null; }   // ฝากขาย: ไม่มีเอกสารส่งคุณหญิง
   if (d.book_status !== 'ปิดไฟแนนซ์') { d.closing_finance = null; form.priv.closing_amount = null; }   // ซื้อสด: ล้างข้อมูลปิดไฟแนนซ์
   if (isAdmin() && form.priv.final_price == null && (form.priv.purchase_price != null || form.priv.purchase_commission != null)) form.priv.final_price = (form.priv.purchase_price || 0) + (form.priv.purchase_commission || 0);   // ราคาที่จบ ว่าง = ราคาถึงลูกค้า + ค่าคอม
   if (d.book_status === 'ปิดไฟแนนซ์' && Number(d.deposit_amount) > 0 && !d.deposit_status) d.deposit_status = 'รอคืน';
@@ -5218,7 +5218,7 @@ function r2RenderLedger() {
   if (mbar) mbar.classList.toggle('hidden', f !== 'month');
   const all = cars.map(c => ({ code: c.code, st: r1IsPayout(c.code) ? 'ปันผล' : r1Status(c.code), c: r2CostOf(c.code) }));
   let stockCost = 0, stockCnt = 0, noPrice = 0;
-  all.forEach(r => { if (r.st !== 'ขาย' && r.st !== 'ปันผล') { stockCnt++; if (r.c.hasPrice) stockCost += r.c.cost; else noPrice++; } });
+  all.forEach(r => { if (r.st !== 'ขาย' && r.st !== 'ปันผล' && !r1IsConsign(r.code)) { stockCnt++; if (r.c.hasPrice) stockCost += r.c.cost; else noPrice++; } });
   document.getElementById('r2LedgerSub').textContent = 'ต้นทุนรวมรถที่ยังไม่ขาย ' + r2M(stockCost) + ' บาท (' + stockCnt + ' คัน' + (noPrice ? ' · ยังไม่มีราคาซื้อ ' + noPrice + ' คัน ไม่นับรวม' : '') + ')';
   if (f === 'month') { r2RenderLedgerMonth(body); return; }
   let rows = all.filter(r => f === 'all' ? true : f === 'sold' ? r.st === 'ขาย' : f === 'payout' ? r.st === 'ปันผล' : (r.st !== 'ขาย' && r.st !== 'ปันผล'));
@@ -6278,7 +6278,7 @@ function r3OverviewData(mk) {
   const stock = Object.values(carDetails).filter(d => d && d.code && r1Status(d.code) !== 'ขาย');
   const free = stock.filter(d => r1Status(d.code) === 'ว่าง').length, booked = stock.filter(d => r1Status(d.code) === 'จอง').length;
   let sunk = 0, noPrice = 0;
-  stock.forEach(d => { const c = r2CostOf(d.code); if (c.hasPrice) sunk += c.cost; else noPrice++; });
+  stock.forEach(d => { if (d.book_status === 'ฝากขาย') return; const c = r2CostOf(d.code); if (c.hasPrice) sunk += c.cost; else noPrice++; });
   const dvs = Object.values(r2Deliveries).filter(dv => dv.delivery_date && String(dv.delivery_date).slice(0, 7) === mk && dv.car_code && !r1IsPayout(dv.car_code) && r2DeliveryByCar(dv.car_code) === dv);
   const salesAmt = dvs.reduce((s, dv) => s + (Number(dv.sold_price) || 0), 0);
   const D = r2MonthData(mk);
@@ -6326,8 +6326,10 @@ function r3StockGaps() {
     const reasons = [];
     if (!d) reasons.push('ยังไม่ลงข้อมูลรถเข้า');
     else {
-      if (!d.pledge_date) reasons.push('ยังไม่ระบุวันที่จำนำ');
-      if (pv.final_price == null && pv.purchase_price == null) reasons.push('ยังไม่ลงราคาซื้อ');
+      if (d.book_status !== 'ฝากขาย') {
+        if (!d.pledge_date) reasons.push('ยังไม่ระบุวันที่จำนำ');
+        if (pv.final_price == null && pv.purchase_price == null) reasons.push('ยังไม่ลงราคาซื้อ');
+      }
     }
     if (reasons.length) out.push({ code: c.code, reasons, noDetail: !d });
   });
