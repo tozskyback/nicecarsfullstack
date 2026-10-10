@@ -787,6 +787,7 @@
             <option value="ขาย">ขายแล้ว</option>
             <option value="ปันผล">ปันผล</option>
           </select>
+          <button class="btn btn-ghost" onclick="r4SaveStockImage()" title="บันทึกตารางรถว่าง/จองเป็นรูป">บันทึกรูปสต็อก</button>
         </div>
         <div class="table-wrap">
           <table>
@@ -797,6 +798,7 @@
                 <th>ทะเบียน</th>
                 <th>รถ</th>
                 <th>ไมล์</th>
+                <th>ราคาขาย</th>
                 <th>เชื้อเพลิง</th>
                 <th>ลำดับเจ้าของ</th>
                 <th>Warranty หมดอายุ</th>
@@ -3316,11 +3318,13 @@ function r1Status(code) {
   const d = carDetails[code];
   return d && d.stock_status === 'จอง' ? 'จอง' : 'ว่าง';
 }
+function r1IsConsign(code) { const d = carDetails[code]; return !!(d && d.book_status === 'ฝากขาย'); }
 function r1Title(code) {
   const d = carDetails[code];
-  if (d && (d.brand || d.model_name)) return [d.brand, d.model_name, d.sub_model].filter(Boolean).join(' ');
+  const pre = r1IsConsign(code) ? '(ฝากขาย) ' : '';
+  if (d && (d.brand || d.model_name)) return pre + [d.brand, d.model_name, d.sub_model].filter(Boolean).join(' ');
   const c = r1Car(code);
-  return c ? c.model : '';
+  return pre + (c ? c.model : '');
 }
 /* ---------- สต็อกรายเดือน: รถที่ยังไม่ขายอยู่เดือนปัจจุบันเสมอ รถที่ขายแล้วอยู่ในเดือนที่ขาย ---------- */
 let r1StockMonthKey = null;
@@ -3407,7 +3411,7 @@ function r1DocMissing(d) {
 function r1DocItems() {
   const out = [];
   Object.values(carDetails).forEach(d => {
-    if (d.docs_sent_date) return;
+    if (d.docs_sent_date || d.book_status === 'ฝากขาย') return;
     const missing = r1DocMissing(d);
     out.push({ code: d.code, d, missing, complete: missing.length === 0 });
   });
@@ -3617,6 +3621,7 @@ function renderStock() {
         <td class="muted">${d ? escapeHtml([d.plate, d.plate_province].filter(Boolean).join(' ') || '—') : '—'}</td>
         <td>${carCell}</td>
         <td class="muted">${d ? fmtMoney(d.mileage) : '—'}</td>
+        <td>${d && Number(d.sale_price) > 0 ? '<b>' + fmtMoney(d.sale_price) + '</b>' : '<span class="muted">—</span>'}</td>
         <td class="muted">${d && d.fuel ? escapeHtml(d.fuel) : '—'}</td>
         ${ownerCell}
         ${warrantyCell}
@@ -3624,6 +3629,63 @@ function renderStock() {
       </tr>
     `;
   }).join('');
+}
+
+/* ---------- บันทึกรูปตารางสต็อก (เฉพาะรถว่าง + จอง) ---------- */
+function r4SaveStockImage() {
+  const rows = cars.filter(c => !c.sold).map(c => ({ code: c.code, d: carDetails[c.code] || {}, st: r1Status(c.code) }))
+    .sort((a, b) => ((a.st === 'จอง') - (b.st === 'จอง')) || a.code.localeCompare(b.code, undefined, { numeric: true, sensitivity: 'base' }));
+  if (!rows.length) { showToast('ไม่มีรถว่างหรือจองให้บันทึก', true); return; }
+  const cols = [
+    { h: 'กุญแจ', w: 70, f: r => r.d.key_slot || '', a: 'c' },
+    { h: 'รหัสรถ', w: 90, f: r => r.code, a: 'c' },
+    { h: 'รถ', w: 380, f: r => r1Title(r.code) },
+    { h: 'ปี', w: 70, f: r => r.d.year_reg || r.d.year_made || '', a: 'c' },
+    { h: 'สี', w: 110, f: r => r.d.color || '' },
+    { h: 'ทะเบียน', w: 150, f: r => [r.d.plate, r.d.plate_province].filter(Boolean).join(' ') },
+    { h: 'ไมล์ (กม.)', w: 120, f: r => r.d.mileage != null && r.d.mileage !== '' ? fmtMoney(r.d.mileage) : '', a: 'r' },
+    { h: 'ราคาขาย (บาท)', w: 150, f: r => Number(r.d.sale_price) > 0 ? fmtMoney(r.d.sale_price) : '', a: 'r' },
+    { h: 'สถานะ', w: 80, f: r => r.st, a: 'c' },
+  ];
+  const sc = 2, rowH = 38, padX = 12, titleH = 64;
+  const W = cols.reduce((a, c) => a + c.w, 0), H = titleH + rowH * (rows.length + 1) + 16;
+  const cv = document.createElement('canvas');
+  cv.width = W * sc; cv.height = H * sc;
+  const g = cv.getContext('2d'); g.scale(sc, sc);
+  const ff = '"Sarabun","Noto Sans Thai","Tahoma",sans-serif';
+  g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);
+  g.textBaseline = 'middle';
+  g.fillStyle = '#1A1A1A'; g.font = '700 22px ' + ff; g.textAlign = 'left';
+  g.fillText('NICE CARS · สต็อกรถว่าง / จอง', padX, 24);
+  g.fillStyle = '#6B7280'; g.font = '14px ' + ff;
+  g.fillText(r1FmtDmy(r1TodayStr()) + ' · ' + rows.length + ' คัน (ว่าง ' + rows.filter(r => r.st === 'ว่าง').length + ' · จอง ' + rows.filter(r => r.st === 'จอง').length + ')', padX, 48);
+  const fit = (t, w) => { t = String(t); while (t.length > 1 && g.measureText(t).width > w - padX * 2) t = t.slice(0, -1); return t; };
+  const cell = (c, t, x, y, bold, color) => {
+    g.font = (bold ? '700 ' : '') + '15px ' + ff; g.fillStyle = color || '#1A1A1A';
+    t = fit(t, c.w);
+    if (c.a === 'r') { g.textAlign = 'right'; g.fillText(t, x + c.w - padX, y); }
+    else if (c.a === 'c') { g.textAlign = 'center'; g.fillText(t, x + c.w / 2, y); }
+    else { g.textAlign = 'left'; g.fillText(t, x + padX, y); }
+  };
+  let y = titleH;
+  g.fillStyle = '#F3EFE6'; g.fillRect(0, y, W, rowH);
+  let x = 0; cols.forEach(c => { cell(c, c.h, x, y + rowH / 2, true); x += c.w; });
+  rows.forEach((r, i) => {
+    y += rowH;
+    if (i % 2) { g.fillStyle = '#FAF8F3'; g.fillRect(0, y, W, rowH); }
+    g.strokeStyle = '#E5E0D3'; g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke();
+    x = 0;
+    cols.forEach(c => { const isSt = c.h === 'สถานะ'; cell(c, c.f(r), x, y + rowH / 2, isSt || c.h === 'ราคาขาย (บาท)', isSt ? R1_STATUS_COLOR[r.st] : null); x += c.w; });
+  });
+  g.strokeStyle = '#E5E0D3'; g.beginPath(); g.moveTo(0, y + rowH); g.lineTo(W, y + rowH); g.stroke();
+  cv.toBlob(b => {
+    if (!b) { showToast('สร้างรูปไม่สำเร็จ', true); return; }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(b); a.download = 'stock_' + r1TodayStr() + '.png';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    showToast('บันทึกรูปสต็อกแล้ว');
+  }, 'image/png');
 }
 
 /* ---------- car drawer (form) ---------- */
@@ -3648,7 +3710,7 @@ const R1_SECTIONS = [
     { k: 'purchase_price', label: 'ราคาถึงลูกค้า (บาท)', type: 'money', half: true, priv: true },
     { k: 'purchase_commission', label: 'ค่าคอม (ถ้ามี)', type: 'money', half: true, priv: true },
     { k: '_final_warn', label: '', type: 'final_warn', priv: true },
-    { k: 'book_status', label: 'ซื้อรถ', type: 'select', options: ['ซื้อสด', 'ปิดไฟแนนซ์'], def: 'ซื้อสด', hint: 'ซื้อสด = รถมีเล่ม · ปิดไฟแนนซ์ = ต้องปิดไฟแนนซ์ของเจ้าของเก่า' },
+    { k: 'book_status', label: 'ซื้อรถ', type: 'select', options: ['ซื้อสด', 'ฝากขาย', 'ปิดไฟแนนซ์'], def: 'ซื้อสด', hint: 'ซื้อสด = รถมีเล่ม · ปิดไฟแนนซ์ = ต้องปิดไฟแนนซ์ของเจ้าของเก่า' },
     { k: 'closing_finance', label: 'ชื่อไฟแนนซ์ที่ปิด', half: true, closing: true },
     { k: 'closing_amount', label: 'ยอดปิดไฟแนนซ์ (บาท)', type: 'money', half: true, closing: true, priv: true },
     { k: '_closing_diff', label: 'ส่วนต่างยอดปิดไฟแนนซ์ (ราคาถึงลูกค้า − ยอดปิดไฟแนนซ์)', type: 'closing_diff', closing: true, priv: true },
@@ -3686,7 +3748,7 @@ const R1_SECTIONS = [
     { k: 'deposit_returned_date', label: 'วันที่ได้คืน', type: 'dmy', half: true },
     { k: 'deposit_returned_amount', label: 'ยอดที่ได้คืนจริง (บาท)', type: 'money', half: true },
   ]},
-  { id: 'docs', title: 'เอกสารส่งคุณหญิง', access: 'staff', fields: [
+  { id: 'docs', title: 'เอกสารส่งคุณหญิง', access: 'staff', nonconsign: true, fields: [
     { k: 'doc_contract', label: 'สัญญาซื้อขาย', type: 'select', options: R1_DOC_OPTS, def: 'ยังไม่มี', half: true },
     { k: 'doc_book', label: 'เล่มทะเบียนรถ', type: 'select', options: R1_DOC_OPTS, def: 'ยังไม่มี', half: true },
     { k: 'doc_house', label: 'สำเนาทะเบียนบ้าน', type: 'select', options: ['ยังไม่มี', 'มีแล้ว', 'ไม่ต้องใช้'], def: 'ยังไม่มี', half: true },
@@ -3771,7 +3833,7 @@ function r1RenderForm(code) {
       else { flush(); inner += h; }
     });
     flush();
-    html += `<div class="r1-form-section${sec.closing ? ' r1-closing-only' : ''}" id="r1sec_${sec.id}"><h4>${sec.title}</h4>${inner}</div>`;
+    html += `<div class="r1-form-section${sec.closing ? ' r1-closing-only' : ''}${sec.nonconsign ? ' r1-nonconsign-only' : ''}" id="r1sec_${sec.id}"><h4>${sec.title}</h4>${inner}</div>`;
   });
   document.getElementById('carDrawerBody').innerHTML = html;
   const list = document.getElementById('r1CodeList');
@@ -3782,6 +3844,8 @@ function r1UpdateVisibility() {
   const el = document.getElementById('r1f_book_status');
   const closing = !el || el.value === 'ปิดไฟแนนซ์';
   document.querySelectorAll('#carDrawerBody .r1-closing-only').forEach(n => n.classList.toggle('hidden', !closing));
+  const consign = !!el && el.value === 'ฝากขาย';
+  document.querySelectorAll('#carDrawerBody .r1-nonconsign-only').forEach(n => n.classList.toggle('hidden', consign));
   const ci = document.getElementById('r1ClosingInfo'), cf = document.getElementById('r1f_closing_finance');
   if (ci && cf) ci.textContent = cf.value.trim() || '— ยังไม่ระบุ (กรอกที่ "ซื้อรถเข้า") —';
   if (typeof r1CarCalc === 'function') r1CarCalc();
@@ -3851,6 +3915,8 @@ async function saveCarDrawer() {
     const used = r1UsedSlots(code);
     if (used[d.key_slot]) { showToast('รหัสกุญแจ ' + d.key_slot + ' ถูกใช้โดยรถ ' + used[d.key_slot] + ' อยู่แล้ว', true); return; }
   }
+  if (d.book_status !== 'ปิดไฟแนนซ์') { d.deposit_amount = null; d.deposit_paid_date = null; d.deposit_status = null; d.deposit_returned_date = null; d.deposit_returned_amount = null; }   // ซื้อสด/ฝากขาย: ไม่มีเงินมัดจำเล่ม
+  if (d.book_status === 'ฝากขาย') { d.docs_sent_date = null; ['doc_contract', 'doc_book', 'doc_house', 'doc_id', 'doc_transfer', 'doc_poa'].forEach(k => { d[k] = 'ยังไม่มี'; }); d.doc_note = null; }   // ฝากขาย: ไม่มีเอกสารส่งคุณหญิง
   if (d.book_status !== 'ปิดไฟแนนซ์') { d.closing_finance = null; form.priv.closing_amount = null; }   // ซื้อสด: ล้างข้อมูลปิดไฟแนนซ์
   if (isAdmin() && form.priv.final_price == null && (form.priv.purchase_price != null || form.priv.purchase_commission != null)) form.priv.final_price = (form.priv.purchase_price || 0) + (form.priv.purchase_commission || 0);   // ราคาที่จบ ว่าง = ราคาถึงลูกค้า + ค่าคอม
   if (d.book_status === 'ปิดไฟแนนซ์' && Number(d.deposit_amount) > 0 && !d.deposit_status) d.deposit_status = 'รอคืน';
@@ -5098,7 +5164,8 @@ function r2CostOf(code, Lo) {
   const pledgeDate = r1PledgeDate(d);
   const endDate = L.pledge_returned_date || r1TodayStr();
   const days = pledgeDate ? r2DaysBetween(pledgeDate, endDate) : null;
-  const interest = days == null ? 0 : pledge * R2_INTEREST_PER_MONTH * days / 30;
+  const consign = d.book_status === 'ฝากขาย';
+  const interest = (days == null || consign) ? 0 : pledge * R2_INTEREST_PER_MONTH * days / 30;
   const comm = refs.delivery ? r2Commission(refs.delivery) : null;
   const salesComm = comm ? comm.amount : 0;
   const tmode = refs.delivery ? refs.delivery.transfer_mode : (refs.booking ? refs.booking.transfer_mode : null);
@@ -5106,7 +5173,7 @@ function r2CostOf(code, Lo) {
   const otherExp = r2ListSum(L.other_expenses);
   const num = x => Number(x) || 0;
   const autos = r2LedgerAutos(code);
-  const closing = L.closing_amount != null && L.closing_amount !== '' ? num(L.closing_amount) : num(autos.closing_amount);
+  const closing = 0;   // เอาหัวข้อยอดปิดไฟแนนซ์ออกจากบัญชีต่อคันแล้ว
   const release = L.release_money != null && L.release_money !== '' ? num(L.release_money) : num(autos.release_money);
   const rest = closing + num(L.inspect_fee) + num(L.broker_sell_fee) + num(L.wash_fee) + num(L.doc_release_fee) + salesComm + transferActual + otherExp;
   const cost = pledge + adjust + interest + rest;
@@ -5139,7 +5206,7 @@ function r2CostOf(code, Lo) {
   put(A.forfeited_deposit, 'in', num(L.forfeited_deposit), 'ยึดเงินจอง');
   put(A.transfer_collected, 'in', transferCollected, 'เก็บค่าจัดโอนจากลูกค้า');
   (L.other_income || []).forEach(x => put(x.account, 'in', num(x.amount), x.label || 'รายรับอื่น ๆ'));
-  return { items, hasPrice, price, toCustomer, closingDiff, pledgeAuto, buyComm, pledge, adjust, pledgeDate, endDate, days, interest, salesComm, comm, tmode, transferActual, otherExp, rest, cost, depositAuto, depositPending, transferCollected, income, profit: income - cost, refs, byAcct, release, closing, autos, returned: !!L.pledge_returned_date };
+  return { consign, items, hasPrice, price, toCustomer, closingDiff, pledgeAuto, buyComm, pledge, adjust, pledgeDate, endDate, days, interest, salesComm, comm, tmode, transferActual, otherExp, rest, cost, depositAuto, depositPending, transferCollected, income, profit: income - cost, refs, byAcct, release, closing, autos, returned: !!L.pledge_returned_date };
 }
 
 function r2RenderLedger() {
@@ -5186,6 +5253,7 @@ function r2AcctSel(cls, val) {
 }
 // acct: undefined = ไม่มีช่องบัญชี (ใบส่งมอบ) · '' หรือชื่อบัญชี = มีช่องบัญชี (บัญชีต่อคัน)
 function r2InterestText(c) {
+  if (c.consign) return 'รถฝากขาย — ไม่คิดดอกเบี้ย';
   if (c.days == null) return '—';
   return r2M(c.interest) + ' บาท (' + r1FmtDmy(c.pledgeDate) + ' → ' + r1FmtDmy(c.endDate) + ' = ' + c.days + ' วัน' + (c.returned ? ' · นับถึงวันคืนจำนำ' : ' · นับถึงวันนี้ วิ่งต่อจนกว่าจะใส่วันที่คืนจำนำ') + ')';
 }
@@ -5242,7 +5310,7 @@ function r2LedgerRender(code) {
   const stBtn = document.getElementById('r2SettleBtn');
   if (stBtn) stBtn.textContent = sl0 ? 'ยกเลิกปันผลแล้ว' : 'ปันผลแล้ว';
   let h = (sl0 ? `<div class="r2-info" style="border-left-color:#157F3C;"><b>ปันผลแล้ว</b> เมื่อ ${r1FmtDmy(sl0.settled_date)} · กำไร/ขาดทุนที่นับในเดือนนั้น ${(Number(sl0.settled_profit) >= 0 ? '+' : '−') + r2M(Math.abs(Number(sl0.settled_profit) || 0))} บาท (ยอดที่นับคือกำไร/ขาดทุน ไม่ใช่ยอดปันผล) · ตัวเลขที่นับถูกบันทึกไว้ตอนกดปุ่ม แก้บัญชีภายหลังไม่เปลี่ยนยอดเดิม</div>` + (r2EditedAfterSettle(sl0) ? `<div class="r2-warn">⚠ มีการแก้บัญชีคันนี้หลังกดปันผลแล้ว ยอดที่นับในเดือนยังเป็นยอดเดิม — ตรวจให้ถูกต้อง แล้วกด "ยกเลิกปันผลแล้ว" และ "ปันผลแล้ว" ใหม่ถ้าต้องการตัดยอดใหม่</div>` : '') : '') + `<div class="r2-info">
-    ราคาที่จบ: <b>${c0.hasPrice ? r2M(c0.price) : '— (ยังไม่กรอก)'}</b> บาท · ราคาถึงลูกค้า: <b>${pv.purchase_price != null ? r2M(pv.purchase_price) : '—'}</b> · ค่าคอมซื้อ: <b>${pv.purchase_commission != null ? r2M(pv.purchase_commission) : '—'}</b>${c0.closingDiff != null ? '<br>ส่วนต่างยอดปิดไฟแนนซ์ (ราคาถึงลูกค้า − ยอดปิด): <b>' + r2M(c0.closingDiff) + '</b> บาท' : ''}<br>
+    ราคาที่จบ: <b>${c0.hasPrice ? r2M(c0.price) : '— (ยังไม่กรอก)'}</b> บาท · ราคาถึงลูกค้า: <b>${pv.purchase_price != null ? r2M(pv.purchase_price) : '—'}</b> · ค่าคอมซื้อ: <b>${pv.purchase_commission != null ? r2M(pv.purchase_commission) : '—'}</b><br>
     วันที่รับรถเข้า: <b>${d.received_date ? r1FmtDmy(d.received_date) : '—'}</b> · วันที่จำนำ: <b>${c0.pledgeDate ? r1FmtDmy(c0.pledgeDate) : '—'}</b>
     ${isAdmin() && !c0.hasPrice ? '<br><span class="r2-neg">ยังไม่มีราคาซื้อ — กรอกได้ที่ฟอร์มรถเข้าในหน้าสต็อกรถ</span>' : ''}
   </div>`;
@@ -5254,7 +5322,6 @@ function r2LedgerRender(code) {
     FA('จำนวน (บาท)', M('pledge_adjust_amount', L.pledge_adjust_amount), 'กรอกเป็นจำนวนบวก ระบบใส่เครื่องหมายให้', 'pledge_adjust'));
   h += F('ดอกเบี้ย (คำนวณ 0.5%/เดือน)', `<div class="r2-static" id="r2l_interest_live">${r2InterestText(c0)}</div>` + AC('interest'));
   h += F('วันที่คืนจำนำ', `<input type="text" id="r2l_pledge_returned_date" inputmode="numeric" autocomplete="off" maxlength="10" placeholder="พิมพ์ตัวเลข เช่น 31122027" oninput="r1DateInput(this)" value="${escapeHtml(L.pledge_returned_date ? r1FmtDmy(L.pledge_returned_date) : '')}">`, 'ใส่เมื่อคืนจำนำแล้ว ดอกเบี้ยจะหยุดนับ · ว่าง = นับถึงวันนี้');
-  h += FA('ยอดปิดไฟแนนซ์ (เฉพาะกรณียังไม่รวมในราคารับซื้อ)', M('closing_amount', L.closing_amount != null ? L.closing_amount : au.closing_amount), au.closing_amount != null ? 'ดึงจากข้อมูลรถเข้า (ปิดไฟแนนซ์) · แก้เองได้ · เงินมัดจำเล่มไม่นับเป็นต้นทุน' : 'เงินมัดจำเล่มไม่นับเป็นต้นทุน', 'closing_amount');
   h += R(FA('ค่าคอมซื้อ', M('inspect_fee', L.inspect_fee), '', 'inspect_fee'), FA('ค่าคอมนายหน้าขาย', M('broker_sell_fee', L.broker_sell_fee), '', 'broker_sell_fee'));
   h += R(FA('ค่าล้างรถ', M('wash_fee', L.wash_fee), '', 'wash_fee'), FA('ค่าคอมเอกสารปล่อยรถ', M('doc_release_fee', L.doc_release_fee), '', 'doc_release_fee'));
   h += F('ค่าคอมเซลล์ขาย (คำนวณจากใบส่งมอบ)', `<div class="r2-static">${c0.comm
@@ -5513,7 +5580,7 @@ function r2LedgerCollect(strict) {
     pledge_adjust_type: g('pledge_adjust_type') || null,
     pledge_adjust_amount: r1Num(g('pledge_adjust_amount')),
     pledge_amount: r2NullIfAuto(r1Num(g('pledge_amount')), r2CostOf(code, {}).pledgeAuto),
-    closing_amount: r2NullIfAuto(r1Num(g('closing_amount')), r2LedgerAutos(code).closing_amount),
+    closing_amount: null,
     inspect_fee: r1Num(g('inspect_fee')),
     broker_sell_fee: r1Num(g('broker_sell_fee')),
     wash_fee: r1Num(g('wash_fee')),
