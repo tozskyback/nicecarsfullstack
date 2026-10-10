@@ -3634,7 +3634,7 @@ function renderStock() {
 /* ---------- บันทึกรูปตารางสต็อก (เฉพาะรถว่าง + จอง) ---------- */
 function r4SaveStockImage() {
   const rows = cars.filter(c => !c.sold).map(c => ({ code: c.code, d: carDetails[c.code] || {}, st: r1Status(c.code) }))
-    .sort((a, b) => ((a.st === 'จอง') - (b.st === 'จอง')) || a.code.localeCompare(b.code, undefined, { numeric: true, sensitivity: 'base' }));
+    .sort((a, b) => (Number(a.d.key_slot) || 999) - (Number(b.d.key_slot) || 999) || a.code.localeCompare(b.code, undefined, { numeric: true, sensitivity: 'base' }));   // เรียงตามรหัสกุญแจ · ไม่มีเลขกุญแจไว้ล่าง (เรียงตามรหัสรถ)
   if (!rows.length) { showToast('ไม่มีรถว่างหรือจองให้บันทึก', true); return; }
   const cols = [
     { h: 'กุญแจ', w: 70, f: r => r.d.key_slot || '', a: 'c' },
