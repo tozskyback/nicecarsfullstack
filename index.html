@@ -257,6 +257,12 @@
   .field input:disabled, .field select:disabled, .field textarea:disabled { opacity: 0.7; cursor: not-allowed; }
   .field textarea { min-height: 84px; resize: vertical; font-family: var(--font-th); }
   .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .r4-dt { display: flex; align-items: center; gap: 6px; }
+  .r4-dt input[type=text] { flex: 1; min-width: 0; width: 100%; padding: 9px 11px; border-radius: 7px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); font-family: var(--font-th); font-size: 14px; }
+  .r4-dt.sm input[type=text] { width: 130px; flex: none; padding: 6px 9px; font-size: 13px; }
+  .r4-dt-btn { position: relative; flex: none; width: 38px; height: 36px; border: 1px solid var(--line); border-radius: 7px; background: var(--paper); display: inline-flex; align-items: center; justify-content: center; color: var(--ink-soft); overflow: hidden; cursor: pointer; }
+  .r4-dt.sm .r4-dt-btn { width: 32px; height: 31px; }
+  .r4-dt-btn input[type=date] { position: absolute; inset: 0; width: 100% !important; height: 100%; opacity: 0; cursor: pointer; border: 0 !important; padding: 0 !important; margin: 0; }
   .r4-vat-badge { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 700; background: #C97F0022; color: #9A5F00; vertical-align: middle; }
   .status-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .status-opt { border: 1.5px solid var(--line); border-radius: 7px; padding: 8px 10px; cursor: pointer; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 7px; background: var(--surface); }
@@ -3268,19 +3274,30 @@ function r1DateInput(el) {
   el.value = dg.length > 4 ? dg.slice(0, 2) + '/' + dg.slice(2, 4) + '/' + dg.slice(4)
     : dg.length > 2 ? dg.slice(0, 2) + '/' + dg.slice(2) : dg;
 }
+/* ช่องวันที่แบบ วว/ดด/ปปปป + ปุ่มปฏิทิน: แสดงและพิมพ์เป็น วว/ดด/ปปปป เสมอ (ปฏิทินของเครื่องใช้แค่เลือกวัน แล้วระบบแปลงเป็น วว/ดด/ปปปป ให้) */
+const R4_CAL_SVG = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="2"/><path d="M3 10h18M8 3v4M16 3v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+function r4IsTouch() { try { return !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches); } catch (e) { return false; } }
+function r4DateCombo(id, iso, opt) {
+  opt = opt || {};
+  const v = iso ? String(iso).slice(0, 10) : '';
+  const dis = opt.dis ? ' disabled' : '';
+  return `<span class="r4-dt${opt.small ? ' sm' : ''}"><input type="text" ${id ? 'id="' + id + '" ' : ''}inputmode="${r4IsTouch() ? 'text' : 'numeric'}" autocomplete="off" maxlength="10" placeholder="วว/ดด/ปปปป" oninput="r1DateInput(this)"${opt.attrs || ''}${dis} value="${escapeHtml(v ? r1FmtDmy(v) : '')}"><span class="r4-dt-btn" title="เลือกจากปฏิทิน">${R4_CAL_SVG}<input type="date" tabindex="-1" aria-label="เลือกจากปฏิทิน" value="${escapeHtml(v)}" onclick="try{this.showPicker()}catch(e){}" onchange="r4PickDate(this)"${dis}></span></span>`;
+}
+function r4PickDate(el) {
+  const box = el.closest ? el.closest('.r4-dt') : null;
+  const t = box ? box.querySelector('input[type=text]') : null;
+  if (!t) return;
+  t.value = el.value ? r1FmtDmy(el.value) : '';
+  t.dispatchEvent(new Event('input', { bubbles: true }));
+  t.dispatchEvent(new Event('change', { bubbles: true }));
+}
 /* ใบจอง/ใบส่งมอบ: มือถือ (หน้าจอสัมผัส) ใช้ช่องปฏิทินให้เลือก · ถ้าอุปกรณ์ไม่รองรับปฏิทิน ใช้ช่องพิมพ์ที่คีย์บอร์ดมี / ได้ (ไม่ใช่แป้นตัวเลขล้วน)
    คอมพิวเตอร์ยังพิมพ์ตัวเลขแล้วระบบใส่ / ให้เหมือนเดิม */
 function r2DateCtl(id, iso) {
   const val = iso ? String(iso).slice(0, 10) : '';
-  let touch = false, nativeOk = false;
-  try {
-    touch = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
-    const t = document.createElement('input'); t.setAttribute('type', 'date');
-    nativeOk = t.type === 'date';
-  } catch (e) {}
-  if (touch && nativeOk) return `<input type="date" id="${id}" autocomplete="off" value="${escapeHtml(val)}">`;
+  const touch = r4IsTouch();
+  if (touch) return r4DateCombo(id, val);   // มือถือ: ปุ่มปฏิทิน + พิมพ์ / ได้ · แสดงเป็น วว/ดด/ปปปป
   const shown = escapeHtml(val ? r1FmtDmy(val) : '');
-  if (touch) return `<input type="text" id="${id}" inputmode="text" autocomplete="off" maxlength="10" placeholder="วว/ดด/ปปปป (พิมพ์ / ได้)" oninput="r1DateInput(this)" value="${shown}">`;
   return `<input type="text" id="${id}" inputmode="numeric" autocomplete="off" maxlength="10" placeholder="วว/ดด/ปปปป" oninput="r1DateInput(this)" value="${shown}">`;
 }
 /* วันที่แบบพิมพ์ วว/ดด/ปปปป (รับ พ.ศ. ด้วย) <-> ISO */
@@ -3775,7 +3792,7 @@ const R1_SECTIONS = [
     { k: 'stock_status', label: 'สถานะ', type: 'select', options: ['ว่าง', 'จอง', 'ขาย', 'ปันผล'], def: 'ว่าง', hint: 'เฉพาะเจ้าของเต็นท์แก้ได้ · รถเป็น “ขาย” เมื่อเจ้าของคอนเฟิร์มจากเคสขายแล้ว' },
     { k: 'sold_date', label: 'วันที่ขาย (ถ้าขายแล้ว)', type: 'dmy', hint: 'เว้นว่างได้ ระบบใช้วันที่ตั้งสถานะเป็น "ขาย" · ใช้จัดรถเข้าเดือนที่ขายในหน้าสต็อก' },
     { k: '_listings', label: 'เช็กลิสต์การลงขาย', type: 'checks' },
-    { k: 'list_line_date', label: 'วันที่ลง Line', type: 'date', hint: 'ใช้เตือนเมื่อลง Line ใกล้ครบ 1 เดือนแล้วยังไม่จอง/ขาย · ติ๊ก Line ครั้งแรกแล้วเว้นว่าง ระบบใส่วันนี้ให้' },
+    { k: 'list_line_date', label: 'วันที่ลง Line', type: 'dmyp', hint: 'ใช้เตือนเมื่อลง Line ใกล้ครบ 1 เดือนแล้วยังไม่จอง/ขาย · ติ๊ก Line ครั้งแรกแล้วเว้นว่าง ระบบใส่วันนี้ให้' },
   ]},
   { id: 'deposit', title: 'เงินมัดจำเล่ม', access: 'staff', closing: true, fields: [
     { k: '_closing_info', label: 'ไฟแนนซ์ที่ต้องปิด (จากข้อมูลซื้อรถเข้า)', type: 'closing_info' },
@@ -3822,6 +3839,8 @@ function r1FieldHtml(f, v, ro, code) {
     ctl = `<input type="text" id="${id}" inputmode="decimal" autocomplete="off" oninput="r1MoneyInput(this)" value="${escapeHtml(r1MoneyShown(raw))}"${dis}>`;
   } else if (f.type === 'dmy') {
     ctl = `<input type="text" id="${id}" inputmode="numeric" autocomplete="off" maxlength="10" placeholder="พิมพ์ตัวเลข เช่น 31122027" oninput="r1DateInput(this)" value="${escapeHtml(raw ? r1FmtDmy(raw) : '')}"${dis}>`;
+  } else if (f.type === 'dmyp') {
+    ctl = r4DateCombo(id, raw, { dis: !!dis });
   } else if (f.type === 'slot') {
     const used = r1UsedSlots(code);
     let opts = `<option value="">— ไม่มี —</option>`;
@@ -3922,7 +3941,7 @@ function r1CollectForm() {
       if (f.type === 'number' || f.type === 'slot' || f.type === 'money') {
         val = r1Num(val);
         if (f.k === 'engine_cc' && val != null) val = String(val);
-      } else if (f.type === 'dmy') {
+      } else if (f.type === 'dmy' || f.type === 'dmyp') {
         const p = r1ParseDmy(val);
         if (!p.ok) { out.err = out.err || ('รูปแบบวันที่ของ "' + f.label + '" ไม่ถูกต้อง — พิมพ์เป็น วว/ดด/ปปปป เช่น 31/12/2027'); return; }
         val = p.iso;
@@ -4083,7 +4102,7 @@ function renderRegistry() {
       <div class="main">${tag(x.code)}
         <div class="muted" style="margin-top:2px;">ยังไม่ได้ทำ: ${x.missing.map(escapeHtml).join(', ')}</div>
         ${x.d.list_line && r4InStockTxt(x.d) ? `<div style="margin-top:4px; font-size:13px; font-weight:600; color:#9A5F00;">${escapeHtml(r4InStockTxt(x.d))}</div>` : ''}
-        ${x.d.list_line ? `<div style="margin-top:6px; display:flex; gap:8px; align-items:center;" onclick="event.stopPropagation()"><span class="muted">วันที่ลง Line</span><input type="date" style="padding:5px 8px; border:1px solid var(--line); border-radius:6px; background:var(--paper); font-family:inherit; font-size:13px;" data-code="${escapeHtml(x.code)}" onchange="r4SetLineDate(this.dataset.code, this.value)" value="${escapeHtml(x.d.list_line_date ? String(x.d.list_line_date).slice(0, 10) : '')}"></div>` : ''}
+        ${x.d.list_line ? `<div style="margin-top:6px; display:flex; gap:8px; align-items:center;" onclick="event.stopPropagation()"><span class="muted">วันที่ลง Line</span>${r4DateCombo(null, x.d.list_line_date, { small: true, attrs: ' data-code="' + escapeHtml(x.code) + '" onchange="r4SetLineDate(this.dataset.code, this.value)"' })}</div>` : ''}
         <div style="margin-top:6px;">${r3DelBtn('listing', x.code)}</div>
       </div>
       <div class="check-grid">${R1_LISTINGS.map(([k, l]) =>
@@ -4111,7 +4130,7 @@ function renderRegistry() {
       </div>`).join('') + (nd.length ? `<div class="muted" style="margin:12px 0 6px;">ติ๊ก Line แล้วแต่ยังไม่มีวันที่ลง — เลือกวันที่เพื่อเริ่มนับ 1 เดือน (${nd.length} คัน)</div>` + nd.map(x => `
       <div class="r1-row">
         <div class="main">${tag(x.code)}${r4InStockTxt(x.d) ? `<div class="muted" style="margin-top:2px;">${escapeHtml(r4InStockTxt(x.d))}</div>` : ''}</div>
-        <div class="meta"><input type="date" style="padding:5px 8px; border:1px solid var(--line); border-radius:6px; background:var(--paper); font-family:inherit; font-size:13px;" data-code="${escapeHtml(x.code)}" onchange="r4SetLineDate(this.dataset.code, this.value)" value=""></div>
+        <div class="meta">${r4DateCombo(null, '', { small: true, attrs: ' data-code="' + escapeHtml(x.code) + '" onchange="r4SetLineDate(this.dataset.code, this.value)"' })}</div>
       </div>`).join('') : '');
   }
   r4OrderRegistry();
