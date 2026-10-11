@@ -3262,6 +3262,21 @@ function r1DateInput(el) {
   el.value = dg.length > 4 ? dg.slice(0, 2) + '/' + dg.slice(2, 4) + '/' + dg.slice(4)
     : dg.length > 2 ? dg.slice(0, 2) + '/' + dg.slice(2) : dg;
 }
+/* ใบจอง/ใบส่งมอบ: มือถือ (หน้าจอสัมผัส) ใช้ช่องปฏิทินให้เลือก · ถ้าอุปกรณ์ไม่รองรับปฏิทิน ใช้ช่องพิมพ์ที่คีย์บอร์ดมี / ได้ (ไม่ใช่แป้นตัวเลขล้วน)
+   คอมพิวเตอร์ยังพิมพ์ตัวเลขแล้วระบบใส่ / ให้เหมือนเดิม */
+function r2DateCtl(id, iso) {
+  const val = iso ? String(iso).slice(0, 10) : '';
+  let touch = false, nativeOk = false;
+  try {
+    touch = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+    const t = document.createElement('input'); t.setAttribute('type', 'date');
+    nativeOk = t.type === 'date';
+  } catch (e) {}
+  if (touch && nativeOk) return `<input type="date" id="${id}" autocomplete="off" value="${escapeHtml(val)}">`;
+  const shown = escapeHtml(val ? r1FmtDmy(val) : '');
+  if (touch) return `<input type="text" id="${id}" inputmode="text" autocomplete="off" maxlength="10" placeholder="วว/ดด/ปปปป (พิมพ์ / ได้)" oninput="r1DateInput(this)" value="${shown}">`;
+  return `<input type="text" id="${id}" inputmode="numeric" autocomplete="off" maxlength="10" placeholder="วว/ดด/ปปปป" oninput="r1DateInput(this)" value="${shown}">`;
+}
 /* วันที่แบบพิมพ์ วว/ดด/ปปปป (รับ พ.ศ. ด้วย) <-> ISO */
 function r1FmtDmy(iso) {
   if (!iso) return '—';
@@ -3271,6 +3286,13 @@ function r1FmtDmy(iso) {
 function r1ParseDmy(str) {
   let t = (str || '').trim();
   if (!t) return { ok: true, iso: null };
+  const isoM = t.match(/^(\d{4})-(\d{2})-(\d{2})$/);   // ค่าจากช่องปฏิทิน (input type=date) = yyyy-mm-dd
+  if (isoM) {
+    const iy = +isoM[1], im = +isoM[2], id = +isoM[3];
+    const idt = new Date(iy, im - 1, id);
+    if (idt.getFullYear() !== iy || idt.getMonth() !== im - 1 || idt.getDate() !== id) return { ok: false };
+    return { ok: true, iso: isoM[0] };
+  }
   if (/^\d{8}$/.test(t)) t = t.slice(0, 2) + '/' + t.slice(2, 4) + '/' + t.slice(4);
   const m = t.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2}|\d{4})$/);
   if (!m) return { ok: false };
@@ -4712,7 +4734,7 @@ function r2RenderDocForm(v) {
   const F = (label, ctl, hint, wid) => `<div class="field"${wid ? ' id="' + wid + '"' : ''}><label>${label}</label>${ctl}${hint ? '<div class="hint">' + hint + '</div>' : ''}</div>`;
   const T = (id, val, extra) => `<input type="text" id="r2d_${id}" value="${escapeHtml(val == null ? '' : val)}"${extra || ''}>`;
   const M = (id, val, dis) => `<input type="text" id="r2d_${id}" inputmode="decimal" autocomplete="off" oninput="r1MoneyInput(this)" value="${escapeHtml(r1MoneyShown(val))}"${dis ? ' disabled' : ''}>`;
-  const D = (id, val) => `<input type="text" id="r2d_${id}" inputmode="numeric" autocomplete="off" maxlength="10" placeholder="วว/ดด/ปปปป" oninput="r1DateInput(this)" value="${escapeHtml(val ? r1FmtDmy(String(val).slice(0, 10)) : '')}">`;
+  const D = (id, val) => r2DateCtl('r2d_' + id, val);
   const S = (id, opts, val) => `<select id="r2d_${id}">` + opts.map(o => `<option value="${escapeHtml(o)}"${o === val ? ' selected' : ''}>${escapeHtml(o)}</option>`).join('') + '</select>';
   const R = (...c) => `<div class="field-row">${c.join('')}</div>`;
 
