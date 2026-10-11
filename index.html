@@ -257,8 +257,6 @@
   .field input:disabled, .field select:disabled, .field textarea:disabled { opacity: 0.7; cursor: not-allowed; }
   .field textarea { min-height: 84px; resize: vertical; font-family: var(--font-th); }
   .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  tr.r4-vat-row td:first-child { box-shadow: inset 4px 0 0 #C97F00; }
-  tr.r4-vat-row { background: #FFF8E6; }
   .r4-vat-badge { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 700; background: #C97F0022; color: #9A5F00; vertical-align: middle; }
   .status-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .status-opt { border: 1.5px solid var(--line); border-radius: 7px; padding: 8px 10px; cursor: pointer; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 7px; background: var(--surface); }
@@ -3651,7 +3649,7 @@ function renderStock() {
     const ownerCell = `<td class="muted">${d && d.owner_seq ? escapeHtml(d.owner_seq) : '—'}</td>`;
     const warrantyCell = `<td>${d ? `<div>รถ ${r1WarrantyHtml(d.warranty_expiry)}</div><div>แบต ${r1WarrantyHtml(d.warranty_battery_expiry)}</div>` : '<span class="muted">—</span>'}</td>`;
     return `
-      <tr data-code="${escapeHtml(r.code)}"${r1HasVat(d) ? ' class="r4-vat-row"' : ''} onclick="openCarDrawer(this.dataset.code)">
+      <tr data-code="${escapeHtml(r.code)}" onclick="openCarDrawer(this.dataset.code)">
         <td>${d && d.key_slot ? `<span class="code-badge">${d.key_slot}</span>` : '<span class="muted">—</span>'}</td>
         <td><span class="code-badge">${escapeHtml(r.code)}</span></td>
         <td class="muted">${d ? escapeHtml([d.plate, d.plate_province].filter(Boolean).join(' ') || '—') : '—'}</td>
@@ -3777,7 +3775,7 @@ const R1_SECTIONS = [
     { k: 'stock_status', label: 'สถานะ', type: 'select', options: ['ว่าง', 'จอง', 'ขาย', 'ปันผล'], def: 'ว่าง', hint: 'เฉพาะเจ้าของเต็นท์แก้ได้ · รถเป็น “ขาย” เมื่อเจ้าของคอนเฟิร์มจากเคสขายแล้ว' },
     { k: 'sold_date', label: 'วันที่ขาย (ถ้าขายแล้ว)', type: 'dmy', hint: 'เว้นว่างได้ ระบบใช้วันที่ตั้งสถานะเป็น "ขาย" · ใช้จัดรถเข้าเดือนที่ขายในหน้าสต็อก' },
     { k: '_listings', label: 'เช็กลิสต์การลงขาย', type: 'checks' },
-    { k: 'list_line_date', label: 'วันที่ลง Line', type: 'dmy', hint: 'ใช้เตือนเมื่อลง Line ใกล้ครบ 1 เดือนแล้วยังไม่จอง/ขาย · ติ๊ก Line ครั้งแรกแล้วเว้นว่าง ระบบใส่วันนี้ให้' },
+    { k: 'list_line_date', label: 'วันที่ลง Line', type: 'date', hint: 'ใช้เตือนเมื่อลง Line ใกล้ครบ 1 เดือนแล้วยังไม่จอง/ขาย · ติ๊ก Line ครั้งแรกแล้วเว้นว่าง ระบบใส่วันนี้ให้' },
   ]},
   { id: 'deposit', title: 'เงินมัดจำเล่ม', access: 'staff', closing: true, fields: [
     { k: '_closing_info', label: 'ไฟแนนซ์ที่ต้องปิด (จากข้อมูลซื้อรถเข้า)', type: 'closing_info' },
@@ -4085,7 +4083,7 @@ function renderRegistry() {
       <div class="main">${tag(x.code)}
         <div class="muted" style="margin-top:2px;">ยังไม่ได้ทำ: ${x.missing.map(escapeHtml).join(', ')}</div>
         ${x.d.list_line && r4InStockTxt(x.d) ? `<div style="margin-top:4px; font-size:13px; font-weight:600; color:#9A5F00;">${escapeHtml(r4InStockTxt(x.d))}</div>` : ''}
-        ${x.d.list_line ? `<div style="margin-top:6px; display:flex; gap:8px; align-items:center;" onclick="event.stopPropagation()"><span class="muted">วันที่ลง Line</span><input type="text" inputmode="numeric" autocomplete="off" maxlength="10" placeholder="วว/ดด/ปปปป" style="width:130px; padding:5px 8px; border:1px solid var(--line); border-radius:6px; background:var(--paper); font-family:inherit; font-size:13px;" data-code="${escapeHtml(x.code)}" oninput="r1DateInput(this)" onchange="r4SetLineDate(this.dataset.code, this.value)" value="${escapeHtml(x.d.list_line_date ? r1FmtDmy(x.d.list_line_date) : '')}"></div>` : ''}
+        ${x.d.list_line ? `<div style="margin-top:6px; display:flex; gap:8px; align-items:center;" onclick="event.stopPropagation()"><span class="muted">วันที่ลง Line</span><input type="date" style="padding:5px 8px; border:1px solid var(--line); border-radius:6px; background:var(--paper); font-family:inherit; font-size:13px;" data-code="${escapeHtml(x.code)}" onchange="r4SetLineDate(this.dataset.code, this.value)" value="${escapeHtml(x.d.list_line_date ? String(x.d.list_line_date).slice(0, 10) : '')}"></div>` : ''}
         <div style="margin-top:6px;">${r3DelBtn('listing', x.code)}</div>
       </div>
       <div class="check-grid">${R1_LISTINGS.map(([k, l]) =>
@@ -4096,7 +4094,8 @@ function renderRegistry() {
   const lw = r4LineWatchItems();
   const lwSec = document.getElementById('r4LineWatchSec');
   if (lwSec) {
-    lwSec.classList.toggle('hidden', !lw.length);
+    const nd = r4LineNoDateItems();
+    lwSec.classList.toggle('hidden', !lw.length && !nd.length);
     document.getElementById('r4LineWatchCount').textContent = lw.length;
     document.getElementById('r4LineWatchCount').classList.toggle('warn', lw.length > 0);
     document.getElementById('r4LineWatchList').innerHTML = lw.map(x => `
@@ -4109,7 +4108,11 @@ function renderRegistry() {
           <span class="badge" style="background:${x.due ? '#C0392B18' : '#C97F0018'}; color:${x.due ? '#C0392B' : '#C97F00'};"><span class="dot"></span>${x.due ? 'ครบ 1 เดือนแล้ว — ต้องปรับราคา' : 'ใกล้ครบ 1 เดือน — เฝ้าระวัง'}</span>
           ${btn('เปิดข้อมูล / ปรับราคา', 'r4OpenStockSec', x.code)}
         </div>
-      </div>`).join('');
+      </div>`).join('') + (nd.length ? `<div class="muted" style="margin:12px 0 6px;">ติ๊ก Line แล้วแต่ยังไม่มีวันที่ลง — เลือกวันที่เพื่อเริ่มนับ 1 เดือน (${nd.length} คัน)</div>` + nd.map(x => `
+      <div class="r1-row">
+        <div class="main">${tag(x.code)}${r4InStockTxt(x.d) ? `<div class="muted" style="margin-top:2px;">${escapeHtml(r4InStockTxt(x.d))}</div>` : ''}</div>
+        <div class="meta"><input type="date" style="padding:5px 8px; border:1px solid var(--line); border-radius:6px; background:var(--paper); font-family:inherit; font-size:13px;" data-code="${escapeHtml(x.code)}" onchange="r4SetLineDate(this.dataset.code, this.value)" value=""></div>
+      </div>`).join('') : '');
   }
   r4OrderRegistry();
 
@@ -4154,6 +4157,17 @@ function r4InStockTxt(d) {
   const n = d && d.received_date ? r1DaysSince(d.received_date) : null;
   if (n == null || n < 0) return '';
   return 'รถเข้ามาแล้ว ' + n + ' วัน (ตั้งแต่ ' + r1FmtDmy(d.received_date) + ')';
+}
+/* ติ๊ก Line แล้วแต่ยังไม่มีวันที่ลง (ข้อมูลเก่า) — ให้ใส่วันที่เพื่อเริ่มนับ 1 เดือน */
+function r4LineNoDateItems() {
+  const out = [];
+  Object.values(carDetails).forEach(d => {
+    if (!d.list_line || d.list_line_date) return;
+    if (r1IsPayout(d.code) || r1Status(d.code) !== 'ว่าง') return;
+    out.push({ code: d.code, d });
+  });
+  out.sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true, sensitivity: 'base' }));
+  return out;
 }
 function r4OpenStockSec(code) { openCarDrawer(code, 'stock'); }
 /* เฉพาะเจ้าของเต็นท์: รอคอนเฟิร์มขาย + ลงขายยังไม่ครบ ขึ้นไว้บนสุด · คนอื่นลำดับเดิม */
