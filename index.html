@@ -473,6 +473,7 @@
     <nav class="sidebar-nav">
       <button class="nav-item active" id="casesNavItem" data-tab="cases" onclick="switchTab('cases')"><span class="dot"></span>เคสลูกค้า</button>
       <button class="nav-item hidden" id="stockNavItem" data-tab="stock" onclick="switchTab('stock')"><span class="dot"></span>สต็อกรถ</button>
+      <button class="nav-item hidden" id="buysNavItem" data-tab="buys" onclick="switchTab('buys')"><span class="dot"></span>สรุปรถซื้อเข้า</button>
       <button class="nav-item hidden" id="registryNavItem" data-tab="registry" onclick="switchTab('registry')"><span class="dot"></span>งานทะเบียน / งานตัวรถ</button>
       <button class="nav-item hidden" id="carsNavItem" data-tab="cars" onclick="switchTab('cars')"><span class="dot"></span>จัดการรหัสรถ</button>
       <button class="nav-item hidden" id="brokersNavItem" data-tab="brokers" onclick="switchTab('brokers')"><span class="dot"></span>จัดการรหัสนายหน้า</button>
@@ -878,6 +879,45 @@
           <p class="r1-sub">เห็นเฉพาะเจ้าของเต็นท์ — กด "คืนแจ้งเตือน" ถ้าลบผิด</p>
           <div id="r3DismissList"></div>
         </section>
+      </div>
+    </div>
+
+    <!-- BUYS TAB (สรุปรถซื้อเข้า — แอดมิน) -->
+    <div id="tab-buys" class="hidden">
+      <div class="topbar">
+        <div class="topbar-row">
+          <div>
+            <h2>สรุปรถซื้อเข้า</h2>
+            <p class="sub">รวมข้อมูลรถที่ซื้อเข้า — วันที่ซื้อ รหัสรถ รุ่น/ปี/สี/ไมล์ ราคาที่จบ ราคาขาย และช่องทาง (เห็นเฉพาะเจ้าของเต็นท์)</p>
+          </div>
+          <button class="btn btn-ghost" onclick="r5CopyBuys()" title="คัดลอกตารางที่แสดงอยู่ วางต่อใน Google Sheets / Excel ได้">คัดลอกตาราง</button>
+        </div>
+      </div>
+      <div class="content">
+        <div class="filterbar">
+          <div class="search-box">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M21 21l-4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            <input type="text" id="buysSearch" placeholder="ค้นหารหัสรถ, รุ่น, สี, ช่องทาง…" oninput="renderBuys()">
+          </div>
+          <select class="filter-select" id="buysMonth" onchange="renderBuys()"><option value="all">ทุกเดือน</option></select>
+        </div>
+        <div class="muted" id="buysSummary" style="margin:0 0 10px;"></div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>วันที่ซื้อ</th>
+                <th>รหัสรถ</th>
+                <th>รุ่นรถ · ปี · สี · เลขไมล์</th>
+                <th style="text-align:right;">ราคาที่จบ</th>
+                <th style="text-align:right;">ราคาขาย</th>
+                <th>ช่องทาง</th>
+              </tr>
+            </thead>
+            <tbody id="buysBody"></tbody>
+          </table>
+          <div class="empty-state hidden" id="buysEmpty"><div class="big">ไม่มีรถในมุมมองนี้</div><div>ยังไม่มีข้อมูลรถซื้อเข้า หรือเปลี่ยนตัวกรองด้านบน</div></div>
+        </div>
       </div>
     </div>
 
@@ -1876,6 +1916,7 @@ function switchTab(tab) {
   document.getElementById('tab-postplan').classList.toggle('hidden', tab !== 'postplan');
   document.getElementById('tab-stock').classList.toggle('hidden', tab !== 'stock');
   document.getElementById('tab-registry').classList.toggle('hidden', tab !== 'registry');
+  document.getElementById('tab-buys').classList.toggle('hidden', tab !== 'buys');
   document.getElementById('tab-docs').classList.toggle('hidden', tab !== 'docs');
   document.getElementById('tab-comm').classList.toggle('hidden', tab !== 'comm');
   document.getElementById('tab-ledger').classList.toggle('hidden', tab !== 'ledger');
@@ -1884,6 +1925,7 @@ function switchTab(tab) {
   document.getElementById('tab-monthly').classList.toggle('hidden', tab !== 'monthly');
   if (tab === 'stock') renderStock();
   if (tab === 'registry') renderRegistry();
+  if (tab === 'buys') renderBuys();
   if (tab === 'docs') renderR2Docs();
   if (tab === 'comm') renderR2Comm();
   if (tab === 'ledger') r2RenderLedger();
@@ -3490,6 +3532,7 @@ async function reloadCarPrivate() {
     carPrivate = {};
     data.forEach(r => { carPrivate[r.car_code] = r; });
     r2RenderLedger();
+    renderBuys();
   } catch (e) { r1Err('โหลดข้อมูลราคาซื้อไม่สำเร็จ: ', e); }
 }
 async function reloadRegistryNotes() {
@@ -3516,6 +3559,7 @@ function setupRound1Nav() {
     document.getElementById('registryNavItem').classList.remove('hidden');
     document.getElementById('stockAddBtn').classList.remove('hidden');
   }
+  if (isAdmin()) document.getElementById('buysNavItem').classList.remove('hidden');
   if (isRegistry()) document.getElementById('casesNavItem').classList.add('hidden');
   r1ApplyNavOrder();
 }
@@ -3573,6 +3617,7 @@ function r1MoveNav(el, dir) {
 function r1RenderAll() {
   renderStock();
   renderRegistry();
+  renderBuys();
   r1RenderAlerts();
   renderR2Docs();
   renderR2Comm();
@@ -3598,6 +3643,83 @@ function r1RenderAlerts() {
   if (docs.length) chips.push(`<button class="alert-chip" onclick="switchTab('registry')">เอกสารส่งคุณหญิงยังไม่ส่ง ${docs.length} คัน</button>`);
   el.innerHTML = chips.join('');
   el.classList.toggle('hidden', chips.length === 0);
+}
+
+/* ---------- สรุปรถซื้อเข้า (เฉพาะแอดมิน เพราะมีราคาที่จบ) ---------- */
+let r5LastRows = [];
+function r5BuyDate(d) { return (d && (d.pledge_date || d.received_date)) || ''; }   // วันที่ซื้อ = วันที่จำนำ (ว่าง = วันที่รถเข้า)
+function r5FinalPrice(code) {
+  const pv = carPrivate[code] || {};
+  const has = x => x != null && x !== '';
+  if (has(pv.final_price)) return Number(pv.final_price);
+  if (has(pv.purchase_price)) return Number(pv.purchase_price);
+  return null;
+}
+function r5Rows() {
+  return Object.values(carDetails).map(d => ({
+    code: d.code, d, date: r5BuyDate(d), final: r5FinalPrice(d.code), consign: d.book_status === 'ฝากขาย',
+    sale: Number(d.sale_price) > 0 ? Number(d.sale_price) : null,
+  }));
+}
+function renderBuys() {
+  const body = document.getElementById('buysBody');
+  if (!body || !isAdmin()) return;
+  const all = r5Rows();
+  // ตัวเลือกเดือน (เดือนที่ซื้อ)
+  const sel = document.getElementById('buysMonth');
+  const months = Array.from(new Set(all.map(r => r.date ? r.date.slice(0, 7) : '').filter(Boolean))).sort().reverse();
+  const cur = sel.value || 'all';
+  const sig = months.join(',');
+  if (sel.dataset.sig !== sig) {
+    sel.innerHTML = '<option value="all">ทุกเดือน</option>' + months.map(m => `<option value="${m}">${escapeHtml(monthKeyLabel(m))}</option>`).join('');
+    sel.dataset.sig = sig;
+    sel.value = months.indexOf(cur) !== -1 ? cur : 'all';
+  }
+  const month = sel.value;
+  const q = (document.getElementById('buysSearch').value || '').trim().toLowerCase();
+  const rows = all.filter(r => {
+    if (month !== 'all' && (r.date || '').slice(0, 7) !== month) return false;
+    if (q) {
+      const d = r.d;
+      const hay = [r.code, r1Title(r.code), d.color, d.purchase_channel, d.plate, r1YearTxt(d)].join(' ').toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  }).sort((a, b) => (b.date ? 1 : 0) - (a.date ? 1 : 0) || String(b.date).localeCompare(String(a.date)) || a.code.localeCompare(b.code, undefined, { numeric: true, sensitivity: 'base' }));
+  r5LastRows = rows;
+  const sum = rows.reduce((t, r) => t + (r.final || 0), 0);
+  const nPrice = rows.filter(r => r.final != null).length;
+  document.getElementById('buysSummary').innerHTML = rows.length ? `ทั้งหมด <b>${rows.length}</b> คัน · รวมราคาที่จบ <b>${fmtMoney(sum)}</b> บาท (${nPrice} คันที่มีราคา)` : '';
+  const empty = document.getElementById('buysEmpty');
+  if (!rows.length) { body.innerHTML = ''; empty.classList.remove('hidden'); return; }
+  empty.classList.add('hidden');
+  body.innerHTML = rows.map(r => {
+    const d = r.d;
+    const sub = [r1YearTxt(d), d.color, d.mileage != null && d.mileage !== '' ? fmtMoney(d.mileage) + ' กม.' : ''].filter(Boolean).join(' · ');
+    return `<tr data-code="${escapeHtml(r.code)}" onclick="openCarDrawer(this.dataset.code)">
+      <td class="muted">${r.date ? r1FmtDmy(r.date) : '—'}</td>
+      <td><span class="code-badge">${escapeHtml(r.code)}</span></td>
+      <td><div class="cust-name">${escapeHtml(r1Title(r.code))}</div><div class="cust-sub">${escapeHtml(sub || '—')}</div></td>
+      <td style="text-align:right;">${r.final != null ? '<b>' + fmtMoney(r.final) + '</b>' : '<span class="muted">' + (r.consign ? 'ฝากขาย' : '—') + '</span>'}</td>
+      <td style="text-align:right;">${r.sale != null ? fmtMoney(r.sale) : '<span class="muted">—</span>'}</td>
+      <td class="muted">${d.purchase_channel ? escapeHtml(d.purchase_channel) : '—'}</td>
+    </tr>`;
+  }).join('');
+}
+async function r5CopyBuys() {
+  if (!r5LastRows.length) { showToast('ไม่มีข้อมูลให้คัดลอก', true); return; }
+  const head = ['วันที่ซื้อ', 'รหัสรถ', 'รุ่นรถ', 'ปีผลิต/ปีจดทะเบียน', 'สี', 'เลขไมล์', 'ราคาที่จบ', 'ราคาขาย', 'ช่องทาง'];
+  const clean = v => String(v == null ? '' : v).replace(/[\t\r\n]+/g, ' ');
+  const lines = r5LastRows.map(r => [
+    r.date ? r1FmtDmy(r.date) : '', r.code, r1Title(r.code), r1YearTxt(r.d), r.d.color || '',
+    r.d.mileage != null && r.d.mileage !== '' ? r.d.mileage : '', r.final != null ? r.final : '', r.sale != null ? r.sale : '', r.d.purchase_channel || '',
+  ].map(clean).join('\t'));
+  const text = [head.join('\t')].concat(lines).join('\n');
+  try {
+    if (navigator.clipboard && window.isSecureContext) await navigator.clipboard.writeText(text);
+    else { const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); }
+    showToast('คัดลอกตาราง ' + r5LastRows.length + ' คันแล้ว');
+  } catch (e) { showToast('คัดลอกไม่สำเร็จ: ' + e.message, true); }
 }
 
 /* ---------- stock page ---------- */
