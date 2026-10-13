@@ -1447,12 +1447,13 @@
 <div class="overlay" id="r2StepOverlay" style="justify-content:center; align-items:center;" onclick="if(event.target===this) closeR2Step()">
   <div class="drawer" style="width:min(420px,92%); height:auto; max-height:88vh; border-radius:12px;">
     <div class="drawer-head">
-      <h3 id="r2StepTitle">แก้สเต็ป</h3>
+      <h3 id="r2StepTitle">แก้สเต็ป / ค่าคอม</h3>
       <button class="drawer-close" onclick="closeR2Step()"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
     </div>
     <div class="drawer-body">
       <div class="r2-info" id="r2StepInfo"></div>
       <div class="field"><label>สเต็ปที่ใช้จริง</label><input type="text" id="r2StepVal" inputmode="numeric" autocomplete="off" placeholder="เว้นว่าง = ใช้ค่าอัตโนมัติ"><div class="hint">ใส่เป็นจำนวนเต็ม เช่น 3 · เว้นว่างเพื่อกลับไปใช้ค่าอัตโนมัติ</div></div>
+      <div class="field"><label>ค่าคอมที่จ่ายจริง (บาท)</label><input type="text" id="r2CommVal" inputmode="decimal" autocomplete="off" oninput="r1MoneyInput(this)" placeholder="เว้นว่าง = สเต็ป × อัตรา"><div class="hint">ใส่เมื่อค่าคอมของเคสนี้ไม่ตรงกับสูตร (ใส่ 0 ได้ ถ้าไม่จ่ายค่าคอม) · ยอดนี้ใช้ทั้งในหน้าค่าคอมและต้นทุนรถ · สเต็ปยังนับเข้าเกณฑ์ของเดือนตามเดิม</div></div>
       <div class="field"><label>หมายเหตุ (เหตุผลที่แก้)</label><input type="text" id="r2StepNote" autocomplete="off"></div>
       <div style="display:flex; gap:10px; margin-top:8px;">
         <button class="btn btn-primary" onclick="saveR2Step()">บันทึก</button>
@@ -4662,7 +4663,10 @@ function r2Commission(dv) {
   const mk = String(dv.delivery_date || '').slice(0, 7);
   const monthSteps = r2MonthSteps(r2SalesOf(dv), mk);
   const rate = r2Rate(monthSteps);
-  return { steps: s.steps, auto: s.auto, full: s.full, manual: s.manual, monthSteps, rate, amount: s.steps * rate };
+  const formula = s.steps * rate;   // ค่าคอมตามสูตร สเต็ป × อัตรา
+  const co = dv.commission_override;
+  const manualAmount = co != null && co !== '';   // แอดมินแก้ยอดค่าคอมเอง (บางเคสไม่แน่นอน)
+  return { steps: s.steps, auto: s.auto, full: s.full, manual: s.manual, monthSteps, rate, formula, manualAmount, amount: manualAmount ? Number(co) || 0 : formula };
 }
 
 function r2OpenSettingsFill() {
@@ -4761,8 +4765,8 @@ function renderR2Comm() {
       <td>${closeBadge}</td>
       <td>${cm.auto == null ? '—' : cm.auto}</td>
       <td><b>${cm.steps}</b>${cm.manual ? ' <span class="r2-flag">แก้ด้วยมือ</span>' : ''}${note}</td>
-      <td><b>${r2M(cm.amount)}</b><div class="muted">${cm.steps} × ${r2M(cm.rate)}</div></td>
-      ${admin ? `<td><button class="icon-btn" title="แก้สเต็ป" data-id="${escapeHtml(String(dv.case_id))}" onclick="openR2Step(this.dataset.id)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 20h9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></button></td>` : ''}
+      <td><b>${r2M(cm.amount)}</b>${cm.manualAmount ? ' <span class="r2-flag">แก้ค่าคอมด้วยมือ</span><div class="muted">ตามสูตร ' + cm.steps + ' × ' + r2M(cm.rate) + ' = ' + r2M(cm.formula) + '</div>' : '<div class="muted">' + cm.steps + ' × ' + r2M(cm.rate) + '</div>'}</td>
+      ${admin ? `<td><button class="btn btn-ghost btn-sm" title="แก้สเต็ปหรือค่าคอมของเคสนี้" data-id="${escapeHtml(String(dv.case_id))}" onclick="openR2Step(this.dataset.id)">แก้ค่าคอม</button></td>` : ''}
     </tr>`;
   }).join('') + '</tbody></table>';
 }
@@ -4773,8 +4777,10 @@ function openR2Step(caseId) {
   if (!dv) return;
   r2StepCaseId = caseId;
   const s = r2StepsOf(dv);
-  document.getElementById('r2StepTitle').textContent = 'แก้สเต็ป · ' + r2CaseCodeOf(dv);
-  document.getElementById('r2StepInfo').textContent = 'ราคาตั้งขาย ' + r2M(dv.list_price) + ' · ขายไป ' + r2M(dv.sold_price) + ' → สเต็ปอัตโนมัติ ' + (s.auto == null ? '— (ราคาไม่ครบ)' : s.auto);
+  const cm = r2Commission(dv);
+  document.getElementById('r2StepTitle').textContent = 'แก้สเต็ป / ค่าคอม · ' + r2CaseCodeOf(dv);
+  document.getElementById('r2StepInfo').textContent = 'ราคาตั้งขาย ' + r2M(dv.list_price) + ' · ขายไป ' + r2M(dv.sold_price) + ' → สเต็ปอัตโนมัติ ' + (s.auto == null ? '— (ราคาไม่ครบ)' : s.auto) + ' · ค่าคอมตามสูตร ' + cm.steps + ' × ' + r2M(cm.rate) + ' = ' + r2M(cm.formula) + ' บาท';
+  document.getElementById('r2CommVal').value = cm.manualAmount ? r1MoneyShown(dv.commission_override) : '';
   document.getElementById('r2StepVal').value = s.manual ? String(dv.steps_override) : '';
   document.getElementById('r2StepNote').value = dv.steps_note || '';
   document.getElementById('r2StepOverlay').classList.add('open');
@@ -4789,10 +4795,13 @@ async function saveR2Step() {
     val = parseInt(raw, 10);
   }
   const note = document.getElementById('r2StepNote').value.trim() || null;
+  const cRaw = document.getElementById('r2CommVal').value.trim();
+  const cv = cRaw === '' ? null : r1Num(cRaw);
+  if (cRaw !== '' && (cv == null || cv < 0)) { showToast('ค่าคอมต้องเป็นตัวเลข (ไม่ติดลบ)', true); return; }
   try {
-    const { error } = await sb.from('car_deliveries').update({ steps_override: val, steps_note: val == null ? null : note, updated_at: Date.now() }).eq('case_id', r2StepCaseId);
+    const { error } = await sb.from('car_deliveries').update({ steps_override: val, commission_override: cv, steps_note: (val == null && cv == null) ? null : note, updated_at: Date.now() }).eq('case_id', r2StepCaseId);
     if (error) throw error;
-    showToast(val == null ? 'กลับไปใช้สเต็ปอัตโนมัติแล้ว' : 'บันทึกสเต็ปแล้ว');
+    showToast(val == null && cv == null ? 'กลับไปใช้สเต็ปและค่าคอมอัตโนมัติแล้ว' : cv != null ? 'บันทึกค่าคอมที่แก้เองแล้ว' : 'บันทึกสเต็ปแล้ว');
     closeR2Step();
     reloadR2Deliveries();
   } catch (e) { showToast('บันทึกไม่สำเร็จ: ' + e.message, true); }
@@ -5558,15 +5567,15 @@ function r2InterestText(c) {
   if (c.days == null) return '—';
   return r2M(c.interest) + ' บาท (' + r1FmtDmy(c.pledgeDate) + ' → ' + r1FmtDmy(c.endDate) + ' = ' + c.days + ' วัน' + (c.returned ? ' · นับถึงวันคืนจำนำ' : ' · นับถึงวันนี้ วิ่งต่อจนกว่าจะใส่วันที่คืนจำนำ') + ')';
 }
-function r2RowHtml(label, amount, cb, acct, date, neg) {
+function r2RowHtml(label, amount, cb, acct, date, neg, dateLabel) {
   const hasAcct = acct !== undefined, hasDate = date !== undefined;
-  const dateH = hasDate ? `<input type="text" class="r2-dt" inputmode="numeric" autocomplete="off" maxlength="10" placeholder="วันที่จ่าย วว/ดด/ปปปป" title="วันที่จ่าย" oninput="r1DateInput(this)" value="${escapeHtml(date ? r1FmtDmy(date) : '')}">` : '';
+  const dateH = hasDate ? `<input type="text" class="r2-dt" inputmode="numeric" autocomplete="off" maxlength="10" placeholder="${dateLabel || 'วันที่จ่าย'} วว/ดด/ปปปป" title="${dateLabel || 'วันที่จ่าย'}" oninput="r1DateInput(this)" value="${escapeHtml(date ? r1FmtDmy(date) : '')}">` : '';
   return `<div class="r2-row${hasAcct ? ' r2-row-acct' : ''}${hasDate ? ' r2-row-date' : ''}">${dateH}<input type="text" class="r2-lbl" placeholder="รายการ" value="${escapeHtml(label || '')}"><input type="text" class="r2-amt" inputmode="decimal" autocomplete="off" placeholder="บาท"${neg ? ' data-neg="1"' : ''} oninput="r1MoneyInput(this)" value="${escapeHtml(r1MoneyShown(amount))}">${hasAcct ? r2AcctSel('r2-acc', acct) : ''}<button type="button" class="icon-btn danger" title="ลบแถว" onclick="this.parentNode.remove(); ${cb || 'r2LedgerPreview()'}">×</button></div>`;
 }
-function r2AddRow(id, cb, withAcct, withDate, neg) {
+function r2AddRow(id, cb, withAcct, withDate, neg, dateLabel) {
   const box = document.getElementById(id);
   if (!box) return;
-  box.insertAdjacentHTML('beforeend', r2RowHtml('', null, cb, withAcct ? '' : undefined, withDate ? '' : undefined, neg));
+  box.insertAdjacentHTML('beforeend', r2RowHtml('', null, cb, withAcct ? '' : undefined, withDate ? '' : undefined, neg, dateLabel));
   const last = box.lastElementChild;
   if (last) last.querySelector('.r2-lbl').focus();
 }
@@ -5626,8 +5635,8 @@ function r2LedgerRender(code) {
   h += R(FA('ค่าคอมซื้อ', M('inspect_fee', L.inspect_fee), '', 'inspect_fee'), FA('ค่าคอมนายหน้าขาย', M('broker_sell_fee', L.broker_sell_fee), '', 'broker_sell_fee'));
   h += R(FA('ค่าล้างรถ', M('wash_fee', L.wash_fee), '', 'wash_fee'), FA('ค่าคอมเอกสารปล่อยรถ', M('doc_release_fee', L.doc_release_fee), '', 'doc_release_fee'));
   h += F('ค่าคอมเซลล์ขาย (คำนวณจากใบส่งมอบ)', `<div class="r2-static">${c0.comm
-    ? `${escapeHtml(salesDisplayName(r2SalesOf(refs.delivery)))} · ${c0.comm.steps} สเต็ป × ${r2M(c0.comm.rate)} = <b>${r2M(c0.comm.amount)}</b> บาท${c0.comm.manual ? ' <span class="r2-flag">แก้ด้วยมือ</span>' : ''}`
-    : 'ยังไม่มีใบส่งมอบ'}</div>`, 'แก้สเต็ปได้ที่หน้า "ค่าคอมเซลล์"').replace(/<\/div>$/, AC('sales_comm') + '</div>');
+    ? `${escapeHtml(salesDisplayName(r2SalesOf(refs.delivery)))} · ${c0.comm.steps} สเต็ป × ${r2M(c0.comm.rate)} = ${c0.comm.manualAmount ? '<s class="muted">' + r2M(c0.comm.formula) + '</s> → ' : ''}<b>${r2M(c0.comm.amount)}</b> บาท${c0.comm.manual ? ' <span class="r2-flag">แก้สเต็ปด้วยมือ</span>' : ''}${c0.comm.manualAmount ? ' <span class="r2-flag">แก้ค่าคอมด้วยมือ</span>' : ''}`
+    : 'ยังไม่มีใบส่งมอบ'}</div>`, 'แก้สเต็ปหรือค่าคอมได้ที่หน้า "ค่าคอมเซลล์" (ปุ่ม แก้ค่าคอม)').replace(/<\/div>$/, AC('sales_comm') + '</div>');
   if (c0.tmode === 'ตามจริง') {
     h += R(
       FA('ค่าจัดโอน (ยอดจริงที่ร้านจ่าย)', M('transfer_actual', L.transfer_actual), 'ใบนี้ระบุเก็บตามจริง', 'transfer_actual'),
@@ -5649,7 +5658,7 @@ function r2LedgerRender(code) {
   }
   h += FA('ค่าคอมไฟแนนซ์ (ถ้ามี)', M('finance_commission', L.finance_commission), 'ค่าคอมที่ไฟแนนซ์จ่ายให้ร้าน · ใส่จากหน้า "เงินจากไฟแนนซ์" หรือกรอกเองได้', 'finance_commission');
   h += FA('ยึดเงินจอง', M('forfeited_deposit', L.forfeited_deposit), '', 'forfeited_deposit');
-  h += `<div class="field"><label>รายรับอื่น ๆ</label><div id="r2l_otherInc">${(L.other_income || []).map(x => r2RowHtml(x.label, x.amount, null, x.account || '')).join('')}</div><button type="button" class="btn btn-ghost btn-sm r2-add" onclick="r2AddRow('r2l_otherInc', null, true)">+ เพิ่มแถว</button></div>`;
+  h += `<div class="field"><label>รายรับอื่น ๆ</label><div id="r2l_otherInc">${(L.other_income || []).map(x => r2RowHtml(x.label, x.amount, null, x.account || '', x.date || '', undefined, 'วันที่รับ')).join('')}</div><button type="button" class="btn btn-ghost btn-sm r2-add" onclick="r2AddRow('r2l_otherInc', null, true, true, false, 'วันที่รับ')">+ เพิ่มแถว</button></div>`;
   h += F('หมายเหตุ', `<textarea id="r2l_note">${escapeHtml(L.note || '')}</textarea>`);
   h += `</div>`;
 
@@ -5899,6 +5908,8 @@ function r2LedgerCollect(strict) {
   };
   if (L.other_expenses.some(x => x.badDate)) { if (strict && !err) err = 'วันที่จ่ายของค่าใช้จ่ายอื่น ๆ ไม่ถูกต้อง — พิมพ์เป็น วว/ดด/ปปปป'; }
   L.other_expenses.forEach(x => { delete x.badDate; });
+  if (L.other_income.some(x => x.badDate)) { if (strict && !err) err = 'วันที่รับของรายรับอื่น ๆ ไม่ถูกต้อง — พิมพ์เป็น วว/ดด/ปปปป'; }
+  L.other_income.forEach(x => { delete x.badDate; });
   return { L, err };
 }
 
