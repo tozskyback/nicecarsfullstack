@@ -5567,15 +5567,15 @@ function r2InterestText(c) {
   if (c.days == null) return '—';
   return r2M(c.interest) + ' บาท (' + r1FmtDmy(c.pledgeDate) + ' → ' + r1FmtDmy(c.endDate) + ' = ' + c.days + ' วัน' + (c.returned ? ' · นับถึงวันคืนจำนำ' : ' · นับถึงวันนี้ วิ่งต่อจนกว่าจะใส่วันที่คืนจำนำ') + ')';
 }
-function r2RowHtml(label, amount, cb, acct, date, neg) {
+function r2RowHtml(label, amount, cb, acct, date, neg, dateLabel) {
   const hasAcct = acct !== undefined, hasDate = date !== undefined;
-  const dateH = hasDate ? `<input type="text" class="r2-dt" inputmode="numeric" autocomplete="off" maxlength="10" placeholder="วันที่จ่าย วว/ดด/ปปปป" title="วันที่จ่าย" oninput="r1DateInput(this)" value="${escapeHtml(date ? r1FmtDmy(date) : '')}">` : '';
+  const dateH = hasDate ? `<input type="text" class="r2-dt" inputmode="numeric" autocomplete="off" maxlength="10" placeholder="${dateLabel || 'วันที่จ่าย'} วว/ดด/ปปปป" title="${dateLabel || 'วันที่จ่าย'}" oninput="r1DateInput(this)" value="${escapeHtml(date ? r1FmtDmy(date) : '')}">` : '';
   return `<div class="r2-row${hasAcct ? ' r2-row-acct' : ''}${hasDate ? ' r2-row-date' : ''}">${dateH}<input type="text" class="r2-lbl" placeholder="รายการ" value="${escapeHtml(label || '')}"><input type="text" class="r2-amt" inputmode="decimal" autocomplete="off" placeholder="บาท"${neg ? ' data-neg="1"' : ''} oninput="r1MoneyInput(this)" value="${escapeHtml(r1MoneyShown(amount))}">${hasAcct ? r2AcctSel('r2-acc', acct) : ''}<button type="button" class="icon-btn danger" title="ลบแถว" onclick="this.parentNode.remove(); ${cb || 'r2LedgerPreview()'}">×</button></div>`;
 }
-function r2AddRow(id, cb, withAcct, withDate, neg) {
+function r2AddRow(id, cb, withAcct, withDate, neg, dateLabel) {
   const box = document.getElementById(id);
   if (!box) return;
-  box.insertAdjacentHTML('beforeend', r2RowHtml('', null, cb, withAcct ? '' : undefined, withDate ? '' : undefined, neg));
+  box.insertAdjacentHTML('beforeend', r2RowHtml('', null, cb, withAcct ? '' : undefined, withDate ? '' : undefined, neg, dateLabel));
   const last = box.lastElementChild;
   if (last) last.querySelector('.r2-lbl').focus();
 }
@@ -5658,7 +5658,7 @@ function r2LedgerRender(code) {
   }
   h += FA('ค่าคอมไฟแนนซ์ (ถ้ามี)', M('finance_commission', L.finance_commission), 'ค่าคอมที่ไฟแนนซ์จ่ายให้ร้าน · ใส่จากหน้า "เงินจากไฟแนนซ์" หรือกรอกเองได้', 'finance_commission');
   h += FA('ยึดเงินจอง', M('forfeited_deposit', L.forfeited_deposit), '', 'forfeited_deposit');
-  h += `<div class="field"><label>รายรับอื่น ๆ</label><div id="r2l_otherInc">${(L.other_income || []).map(x => r2RowHtml(x.label, x.amount, null, x.account || '')).join('')}</div><button type="button" class="btn btn-ghost btn-sm r2-add" onclick="r2AddRow('r2l_otherInc', null, true)">+ เพิ่มแถว</button></div>`;
+  h += `<div class="field"><label>รายรับอื่น ๆ</label><div id="r2l_otherInc">${(L.other_income || []).map(x => r2RowHtml(x.label, x.amount, null, x.account || '', x.date || '', undefined, 'วันที่รับ')).join('')}</div><button type="button" class="btn btn-ghost btn-sm r2-add" onclick="r2AddRow('r2l_otherInc', null, true, true, false, 'วันที่รับ')">+ เพิ่มแถว</button></div>`;
   h += F('หมายเหตุ', `<textarea id="r2l_note">${escapeHtml(L.note || '')}</textarea>`);
   h += `</div>`;
 
@@ -5908,6 +5908,8 @@ function r2LedgerCollect(strict) {
   };
   if (L.other_expenses.some(x => x.badDate)) { if (strict && !err) err = 'วันที่จ่ายของค่าใช้จ่ายอื่น ๆ ไม่ถูกต้อง — พิมพ์เป็น วว/ดด/ปปปป'; }
   L.other_expenses.forEach(x => { delete x.badDate; });
+  if (L.other_income.some(x => x.badDate)) { if (strict && !err) err = 'วันที่รับของรายรับอื่น ๆ ไม่ถูกต้อง — พิมพ์เป็น วว/ดด/ปปปป'; }
+  L.other_income.forEach(x => { delete x.badDate; });
   return { L, err };
 }
 
