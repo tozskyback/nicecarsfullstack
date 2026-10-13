@@ -3645,9 +3645,26 @@ function r1RenderAlerts() {
   el.classList.toggle('hidden', chips.length === 0);
 }
 
+/* ต้นทุน ณ ปัจจุบัน (ยอดจำนำ + ดอกเบี้ย + ค่าใช้จ่ายอื่น) จากบัญชีต่อคัน — เฉพาะแอดมิน */
+function r4CostNowHtml(code) {
+  if (!isAdmin() || !code || typeof r2CostOf !== 'function') return '—';
+  const c = r2CostOf(code);
+  if (!c.hasPrice) return '<span class="muted">ยังไม่มีราคาซื้อ — กรอกราคาที่จบ/ราคาถึงลูกค้าที่ "ซื้อรถเข้า" ก่อน</span>';
+  const parts = ['ยอดจำนำ ' + r2M(c.pledge)];
+  if (c.adjust) parts.push((c.adjust > 0 ? 'จำนำขาด ' : 'จำนำเกิน −') + r2M(Math.abs(c.adjust)));
+  parts.push(c.consign ? 'ฝากขาย ไม่คิดดอกเบี้ย' : 'ดอกเบี้ย ' + r2M(c.interest) + (c.days != null ? ' (' + c.days + ' วัน' + (c.returned ? ' · ถึงวันคืนจำนำ' : ' · ถึงวันนี้') + ')' : ''));
+  if (c.rest) parts.push('ค่าใช้จ่ายอื่น ' + r2M(c.rest));
+  return '<b style="font-size:16px;">' + r2M(c.cost) + ' บาท</b><div class="muted" style="margin-top:3px;">' + parts.map(escapeHtml).join(' + ') + '</div>';
+}
+function r4CostNowTxt(code) {
+  if (!isAdmin() || typeof r2CostOf !== 'function') return '';
+  const c = r2CostOf(code);
+  return c.hasPrice ? 'ต้นทุน ณ ปัจจุบัน ' + r2M(c.cost) + ' บาท' : '';
+}
+
 /* ---------- สรุปรถซื้อเข้า (เฉพาะแอดมิน เพราะมีราคาที่จบ) ---------- */
 let r5LastRows = [];
-function r5BuyDate(d) { return (d && (d.pledge_date || d.received_date)) || ''; }   // วันที่ซื้อ = วันที่จำนำ (ว่าง = วันที่รถเข้า)
+function r5BuyDate(d) { return (d && d.received_date) || ''; }   // วันที่ซื้อ = วันที่รถเข้า
 function r5FinalPrice(code) {
   const pv = carPrivate[code] || {};
   const has = x => x != null && x !== '';
@@ -3877,7 +3894,7 @@ const R1_SECTIONS = [
   ]},
   { id: 'buy', title: 'ซื้อรถเข้า', access: 'staff', fields: [
     { k: 'received_date', label: 'วันที่รถเข้า', type: 'dmy', half: true },
-    { k: 'pledge_date', label: 'วันที่จำนำ', type: 'dmy', half: true, nonconsign: true, hint: 'ถ้าไม่ระบุ นับเป็นวันเดียวกับวันที่รถเข้า' },
+    { k: 'pledge_date', label: 'วันที่จำนำ', type: 'dmy', half: true, nonconsign: true, hint: 'ถ้าไม่ระบุ ระบบใส่วันเดียวกับวันที่รถเข้าให้อัตโนมัติ' },
     { k: 'purchase_channel', label: 'ช่องทาง' },
     { k: 'final_price', label: 'ราคาที่จบ (บาท)', type: 'money', priv: true, hint: 'ราคาถึงลูกค้า + ค่าคอม (คำนวณให้อัตโนมัติ · กรอกเองได้ ถ้าไม่เท่ากันจะมีแจ้งเตือน) · ใช้เป็นฐานของยอดจำนำ' },
     { k: 'purchase_price', label: 'ราคาถึงลูกค้า (บาท)', type: 'money', half: true, priv: true },
@@ -3911,6 +3928,7 @@ const R1_SECTIONS = [
   { id: 'stock', title: 'สต็อก / ลงขาย', access: 'all', fields: [
     { k: 'key_slot', label: 'รหัสกุญแจ (1-25)', type: 'slot', half: true },
     { k: 'sale_price', label: 'ราคาขาย (บาท)', type: 'money', half: true },
+    { k: '_cost_now', label: 'ต้นทุน ณ ปัจจุบัน (เห็นเฉพาะเจ้าของเต็นท์)', type: 'cost_now', priv: true },
     { k: 'stock_status', label: 'สถานะ', type: 'select', options: ['ว่าง', 'จอง', 'ขาย', 'ปันผล'], def: 'ว่าง', hint: 'เฉพาะเจ้าของเต็นท์แก้ได้ · รถเป็น “ขาย” เมื่อเจ้าของคอนเฟิร์มจากเคสขายแล้ว' },
     { k: 'sold_date', label: 'วันที่ขาย (ถ้าขายแล้ว)', type: 'dmy', hint: 'เว้นว่างได้ ระบบใช้วันที่ตั้งสถานะเป็น "ขาย" · ใช้จัดรถเข้าเดือนที่ขายในหน้าสต็อก' },
     { k: '_listings', label: 'เช็กลิสต์การลงขาย', type: 'checks' },
@@ -3960,7 +3978,11 @@ function r1FieldHtml(f, v, ro, code) {
   } else if (f.type === 'money') {
     ctl = `<input type="text" id="${id}" inputmode="decimal" autocomplete="off" oninput="r1MoneyInput(this)" value="${escapeHtml(r1MoneyShown(raw))}"${dis}>`;
   } else if (f.type === 'dmy') {
-    ctl = `<input type="text" id="${id}" inputmode="numeric" autocomplete="off" maxlength="10" placeholder="พิมพ์ตัวเลข เช่น 31122027" oninput="r1DateInput(this)" value="${escapeHtml(raw ? r1FmtDmy(raw) : '')}"${dis}>`;
+    const pledgeAuto = f.k === 'pledge_date' && !raw && v.received_date;   // วันที่จำนำว่าง = ใช้วันที่รถเข้า
+    const hook = f.k === 'received_date' ? '; r4SyncPledge()' : f.k === 'pledge_date' ? '; r4PledgeTyped(this)' : '';
+    ctl = `<input type="text" id="${id}" inputmode="numeric" autocomplete="off" maxlength="10" placeholder="พิมพ์ตัวเลข เช่น 31122027" oninput="r1DateInput(this)${hook}" value="${escapeHtml(raw ? r1FmtDmy(raw) : (pledgeAuto ? r1FmtDmy(v.received_date) : ''))}"${pledgeAuto ? ' data-auto="1"' : ''}${dis}>`;
+  } else if (f.type === 'cost_now') {
+    ctl = `<div class="r2-static" id="r1CostNow">${r4CostNowHtml(code)}</div>`;
   } else if (f.type === 'dmyp') {
     ctl = r4DateCombo(id, raw, { dis: !!dis });
   } else if (f.type === 'slot') {
@@ -4018,6 +4040,13 @@ function r1RenderForm(code) {
   if (list) list.innerHTML = cars.filter(c => !carDetails[c.code]).map(c => `<option value="${escapeHtml(c.code)}">${escapeHtml(c.model || '')}</option>`).join('');
   r1UpdateVisibility();
 }
+/* วันที่จำนำ: ถ้าไม่ได้ระบุเอง ให้ตามวันที่รถเข้า (แก้วันที่รถเข้า วันที่จำนำเปลี่ยนตามจนกว่าจะพิมพ์เอง) */
+function r4SyncPledge() {
+  const r = document.getElementById('r1f_received_date'), pl = document.getElementById('r1f_pledge_date');
+  if (!r || !pl) return;
+  if (pl.dataset.auto === '1' || !pl.value.trim()) { pl.value = r.value; pl.dataset.auto = '1'; }
+}
+function r4PledgeTyped(el) { el.dataset.auto = el.value.trim() ? '' : '1'; }
 function r1UpdateVisibility() {
   const el = document.getElementById('r1f_book_status');
   const closing = !el || el.value === 'ปิดไฟแนนซ์';
@@ -4099,6 +4128,7 @@ async function saveCarDrawer() {
   if (!d.list_line) d.list_line_date = null;
   else if (!d.list_line_date && !(carDetails[code] || {}).list_line) d.list_line_date = r1TodayStr();   // เพิ่งติ๊ก Line ครั้งแรก = ใช้วันนี้
   if (d.book_status !== 'ปิดไฟแนนซ์') { d.deposit_amount = null; d.deposit_paid_date = null; d.deposit_status = null; d.deposit_returned_date = null; d.deposit_returned_amount = null; }   // ซื้อสด/ฝากขาย: ไม่มีเงินมัดจำเล่ม
+  if (d.book_status !== 'ฝากขาย' && !d.pledge_date && d.received_date) d.pledge_date = d.received_date;   // ไม่ระบุวันที่จำนำ = ใช้วันที่รถเข้า
   if (d.book_status === 'ฝากขาย') { d.pledge_date = null; d.docs_sent_date = null; ['doc_contract', 'doc_book', 'doc_house', 'doc_id', 'doc_transfer', 'doc_poa'].forEach(k => { d[k] = 'ยังไม่มี'; }); d.doc_note = null; }   // ฝากขาย: ไม่มีเอกสารส่งคุณหญิง
   if (d.book_status !== 'ปิดไฟแนนซ์') { d.closing_finance = null; form.priv.closing_amount = null; }   // ซื้อสด: ล้างข้อมูลปิดไฟแนนซ์
   if (isAdmin() && form.priv.final_price == null && (form.priv.purchase_price != null || form.priv.purchase_commission != null)) form.priv.final_price = (form.priv.purchase_price || 0) + (form.priv.purchase_commission || 0);   // ราคาที่จบ ว่าง = ราคาถึงลูกค้า + ค่าคอม
@@ -4242,7 +4272,7 @@ function renderRegistry() {
     document.getElementById('r4LineWatchList').innerHTML = lw.map(x => `
       <div class="r1-row">
         <div class="main">${tag(x.code)}
-          <div class="muted" style="margin-top:2px;">ลง Line ${r1FmtDmy(x.d.list_line_date)} · ผ่านมา ${x.days} วัน${Number(x.d.sale_price) > 0 ? ' · ราคาขาย ' + fmtMoney(x.d.sale_price) + ' บาท' : ''}</div>
+          <div class="muted" style="margin-top:2px;">ลง Line ${r1FmtDmy(x.d.list_line_date)} · ผ่านมา ${x.days} วัน${Number(x.d.sale_price) > 0 ? ' · ราคาขาย ' + fmtMoney(x.d.sale_price) + ' บาท' : ''}${r4CostNowTxt(x.code) ? ' · <b>' + escapeHtml(r4CostNowTxt(x.code)) + '</b>' : ''}</div>
           ${r4InStockTxt(x.d) ? `<div style="margin-top:2px; font-size:13px; font-weight:600; color:#9A5F00;">${escapeHtml(r4InStockTxt(x.d))}</div>` : ''}
         </div>
         <div class="meta">
@@ -5436,7 +5466,7 @@ function r2CostOf(code, Lo) {
   const endDate = L.pledge_returned_date || r1TodayStr();
   const days = pledgeDate ? r2DaysBetween(pledgeDate, endDate) : null;
   const consign = d.book_status === 'ฝากขาย';
-  const interest = (days == null || consign) ? 0 : pledge * R2_INTEREST_PER_MONTH * days / 30;
+  const interest = (days == null || consign) ? 0 : Math.round(pledge * R2_INTEREST_PER_MONTH * days / 30);   // ปัดเศษเป็นบาทเต็ม
   const comm = refs.delivery ? r2Commission(refs.delivery) : null;
   const salesComm = comm ? comm.amount : 0;
   const tmode = refs.delivery ? refs.delivery.transfer_mode : (refs.booking ? refs.booking.transfer_mode : null);
