@@ -4135,6 +4135,9 @@ async function saveCarDrawer() {
   if (isAdmin() && form.priv.final_price == null && (form.priv.purchase_price != null || form.priv.purchase_commission != null)) form.priv.final_price = (form.priv.purchase_price || 0) + (form.priv.purchase_commission || 0);   // ราคาที่จบ ว่าง = ราคาถึงลูกค้า + ค่าคอม
   if (d.book_status === 'ปิดไฟแนนซ์' && Number(d.deposit_amount) > 0 && !d.deposit_status) d.deposit_status = 'รอคืน';
   if (d.deposit_status === 'ได้คืนแล้ว' && !d.deposit_returned_date) d.deposit_returned_date = r1TodayStr();
+  { const od = carDetails[code] || {};   // เพิ่งเปลี่ยนเป็น "ได้คืนแล้ว" จากฟอร์ม = รอเจ้าของคอนเฟิร์ม · เปลี่ยนกลับเป็นรอคืน = ล้างสถานะคอนเฟิร์ม
+    if (d.deposit_status === 'ได้คืนแล้ว' && od.deposit_status !== 'ได้คืนแล้ว') { d.deposit_confirmed = false; d.deposit_confirmed_at = null; d.deposit_confirmed_by = null; }
+    else if (d.deposit_status !== 'ได้คืนแล้ว' && od.deposit_confirmed != null) { d.deposit_confirmed = null; d.deposit_confirmed_at = null; d.deposit_confirmed_by = null; d.deposit_shortfall_to = null; } }
   if (d.stock_status === 'ขาย') {
     const cc = r1Car(code);
     if (!d.sold_date && !(cc && cc.sold)) d.sold_date = r1TodayStr();   // รถที่ขายผ่านเคสอยู่แล้ว ใช้เดือนปิดเคสเดิม
@@ -4217,9 +4220,19 @@ function renderRegistry() {
 
   // เงินมัดจำเล่ม
   const dep = r1DepositItems();
-  document.getElementById('r1DepCount').textContent = dep.length;
-  document.getElementById('r1DepCount').classList.toggle('warn', dep.length > 0);
-  document.getElementById('r1DepList').innerHTML = dep.length ? dep.map(x => `
+  const depC = r4DepConfirmItems();
+  const depCHtml = depC.map(x => `
+    <div class="r1-row" style="border-left:3px solid #C97F00;">
+      <div class="main">${tag(x.code)}<div class="muted" style="margin-top:2px;">ได้คืนแล้ว ${x.d.deposit_returned_date ? r1FmtDmy(x.d.deposit_returned_date) : ''} · <b>${isAdmin() ? 'รอคุณกดคอนเฟิร์ม' : 'รอเจ้าของเต็นท์คอนเฟิร์ม'}</b></div></div>
+      <div class="meta">
+        <span>จ่าย <b>${fmtMoney(x.d.deposit_amount)}</b> · ได้คืน <b>${x.d.deposit_returned_amount != null ? fmtMoney(x.d.deposit_returned_amount) : '—'}</b> บาท</span>
+        ${x.diff > 0 ? `<span class="r2-neg">⚠ ขาด ${fmtMoney(x.diff)} บาท</span>` : ''}
+        ${isAdmin() ? btn('คอนเฟิร์มได้คืน', 'r4ConfirmDeposit', x.code, 'btn-primary') : ''}
+      </div>
+    </div>`).join('');
+  document.getElementById('r1DepCount').textContent = dep.length + depC.length;
+  document.getElementById('r1DepCount').classList.toggle('warn', dep.length + depC.length > 0);
+  document.getElementById('r1DepList').innerHTML = depCHtml + (dep.length ? dep.map(x => `
     <div class="r1-row">
       <div class="main">${tag(x.code)}${x.d.closing_finance ? `<div class="muted" style="margin-top:2px;">ไฟแนนซ์: ${escapeHtml(x.d.closing_finance)}</div>` : ''}</div>
       <div class="meta">
@@ -4228,7 +4241,7 @@ function renderRegistry() {
         ${btn('บันทึกได้คืน', 'openDepositModal', x.code, 'btn-primary')}
         ${r3DelBtn('deposit', x.code)}
       </div>
-    </div>`).join('') : '<div class="muted">ไม่มีเงินมัดจำเล่มที่รอคืน</div>';
+    </div>`).join('') : (depC.length ? '' : '<div class="muted">ไม่มีเงินมัดจำเล่มที่รอคืน</div>'));
 
   // เอกสารส่งคุณหญิง
   const docs = r1DocItems();
@@ -4437,14 +4450,87 @@ async function saveDepositModal() {
       deposit_status: 'ได้คืนแล้ว',
       deposit_returned_date: (r1ParseDmy(document.getElementById('r1DepDate').value).iso) || r1TodayStr(),
       deposit_returned_amount: amt,
+      deposit_confirmed: false, deposit_confirmed_at: null, deposit_confirmed_by: null, deposit_shortfall_to: null,
       updated_at: Date.now(),
     }).eq('code', code);
     if (error) throw error;
     const diff = (d && amt != null) ? Number(d.deposit_amount || 0) - amt : 0;
-    showToast(diff > 0 ? 'บันทึกแล้ว — ได้คืนไม่ครบ ขาด ' + fmtMoney(diff) + ' บาท' : 'บันทึกว่าได้รับเงินมัดจำรถ ' + code + ' คืนแล้ว');
     closeDepositModal();
-    reloadCarDetails();
+    await reloadCarDetails();
+    if (isAdmin()) { r4ConfirmDeposit(code); return; }   // เจ้าของเต็นท์บันทึกเอง → ขอยืนยันต่อทันที
+    showToast(diff > 0 ? 'บันทึกแล้ว — ได้คืนไม่ครบ ขาด ' + fmtMoney(diff) + ' บาท · รอเจ้าของเต็นท์กดคอนเฟิร์ม' : 'บันทึกแล้ว — รอเจ้าของเต็นท์กดคอนเฟิร์มว่าได้รับเงินมัดจำรถ ' + code + ' คืน');
   } catch (e) { showToast('บันทึกไม่สำเร็จ: ' + e.message, true); }
+}
+
+/* เงินมัดจำเล่มได้คืนแล้ว → รอเจ้าของเต็นท์คอนเฟิร์ม (deposit_confirmed = false) · แถวเก่าที่เป็น null นับว่าคอนเฟิร์มแล้ว */
+function r4DepConfirmItems() {
+  const out = [];
+  Object.values(carDetails).forEach(d => {
+    if (d.deposit_status !== 'ได้คืนแล้ว' || d.deposit_confirmed !== false) return;
+    out.push({ code: d.code, d, diff: r4DepShortfall(d) });
+  });
+  out.sort((a, b) => String(a.d.deposit_returned_date || '').localeCompare(String(b.d.deposit_returned_date || '')));
+  return out;
+}
+function r4DepShortfall(d) {
+  if (!d || d.deposit_returned_amount == null || d.deposit_returned_amount === '') return 0;
+  const diff = Number(d.deposit_amount || 0) - Number(d.deposit_returned_amount || 0);
+  return diff > 0 ? Math.round(diff * 100) / 100 : 0;
+}
+// ส่วนต่างไปที่ไหน: รถยังไม่ปันผล → ค่าใช้จ่ายอื่น ๆ ของรถคันนั้น · ปันผลแล้ว → ค่าใช้จ่ายรายเดือนของเดือนที่ได้คืน
+function r4DepTarget(code) {
+  const d = carDetails[code] || {};
+  const L = r2Ledger[code] || {};
+  const date = String(d.deposit_returned_date || r1TodayStr()).slice(0, 10);
+  return L.settled ? { kind: 'monthly', mk: date.slice(0, 7), date } : { kind: 'car', date };
+}
+const R4_DEP_LABEL = 'เงินมัดจำเล่มได้คืนไม่ครบ';
+async function r4MoveDepositShortfall(code) {
+  const d = carDetails[code] || {};
+  const diff = r4DepShortfall(d);
+  if (!(diff > 0)) return null;
+  const t = r4DepTarget(code);
+  const now = Date.now();
+  if (t.kind === 'car') {
+    const L = r2Ledger[code] || {};
+    const list = Array.isArray(L.other_expenses) ? L.other_expenses.slice() : [];
+    if (!list.some(x => String(x.label || '').indexOf(R4_DEP_LABEL) === 0)) list.push({ label: R4_DEP_LABEL, amount: diff, date: t.date });
+    const { error } = await sb.from('car_ledger').upsert({ code, other_expenses: list, updated_at: now }, { onConflict: 'code' });
+    if (error) throw error;
+    r2Ledger[code] = Object.assign({}, L, { code, other_expenses: list, updated_at: now });
+    return 'car';
+  }
+  const { data: row, error: e1 } = await sb.from('acct_monthly').select('*').eq('month', t.mk).maybeSingle();
+  if (e1) throw e1;
+  const fixed = row && Array.isArray(row.fixed) ? row.fixed : r3FixedFor(t.mk).rows;
+  const extra = row && Array.isArray(row.extra) ? row.extra.slice() : [];
+  const lbl = R4_DEP_LABEL + ' · ' + code;
+  if (!extra.some(x => x.label === lbl)) extra.push({ label: lbl, amount: diff, date: t.date });
+  const { error } = await sb.from('acct_monthly').upsert({ month: t.mk, fixed, extra, income: row && Array.isArray(row.income) ? row.income : [], note: row ? row.note : null, updated_at: now }, { onConflict: 'month' });
+  if (error) throw error;
+  return 'monthly:' + t.mk;
+}
+function r4ConfirmDeposit(code) {
+  if (!isAdmin()) return;
+  const d = carDetails[code];
+  if (!d) return;
+  const diff = r4DepShortfall(d);
+  let msg = 'ได้คืน ' + r2M(d.deposit_returned_amount) + ' จากที่จ่ายไป ' + r2M(d.deposit_amount) + ' บาท · วันที่ได้คืน ' + (d.deposit_returned_date ? r1FmtDmy(d.deposit_returned_date) : '—');
+  if (diff > 0) {
+    const t = r4DepTarget(code);
+    msg += '\n\n⚠ ได้คืนไม่ครบ ขาด ' + r2M(diff) + ' บาท — เมื่อยืนยัน ระบบจะย้ายส่วนต่างไปที่ ' + (t.kind === 'car' ? 'ค่าใช้จ่ายอื่น ๆ ของรถ ' + code : 'ค่าใช้จ่ายรายเดือน ' + monthKeyLabel(t.mk) + ' (รถคันนี้ปันผลแล้ว)');
+  }
+  r2Confirm('คอนเฟิร์มได้รับเงินมัดจำเล่มคืน · ' + code + '?', msg, 'คอนเฟิร์ม', async () => {
+    try {
+      const to = await r4MoveDepositShortfall(code);
+      const { error } = await sb.from('car_details').update({ deposit_confirmed: true, deposit_confirmed_at: Date.now(), deposit_confirmed_by: session.username, deposit_shortfall_to: to, updated_at: Date.now() }).eq('code', code);
+      if (error) throw error;
+      showToast(to ? 'คอนเฟิร์มแล้ว — ย้ายส่วนต่าง ' + fmtMoney(diff) + ' บาท ไป' + (to === 'car' ? 'ค่าใช้จ่ายของรถ ' + code : 'ค่าใช้จ่ายรายเดือน ' + monthKeyLabel(to.slice(8))) : 'คอนเฟิร์มว่าได้รับเงินมัดจำรถ ' + code + ' คืนแล้ว');
+      await reloadCarDetails();
+      if (typeof reloadR2Ledger === 'function') reloadR2Ledger();
+      if (typeof reloadR3 === 'function') reloadR3();
+    } catch (e) { showToast('บันทึกไม่สำเร็จ: ' + e.message, true); }
+  });
 }
 
 /* notes */
@@ -5050,7 +5136,7 @@ function r2RenderDocForm(v) {
   } else {
     h += F('เงินจอง (บาท)', M('deposit_amount', v.deposit_amount, hasBk), hasBk ? 'ดึงมาจากใบจอง' : 'ไม่มีใบจอง — กรอกเองได้');
   }
-  h += R(F('ซื้อ', S('buy_type', ['เงินสด', 'ไฟแนนซ์'], v.buy_type || 'เงินสด')), F('ไฟแนนซ์ที่จัด', T('finance_company', v.finance_company, ' list="r2FinList" autocomplete="off"'), 'พิมพ์ชื่อให้เหมือนเดิมทุกครั้ง', 'r2w_finco'));
+  h += R(F('ซื้อ', S('buy_type', ['เงินสด', 'ไฟแนนซ์'], v.buy_type || 'เงินสด')), F('ชื่อไฟแนนซ์', T('finance_company', v.finance_company, ' list="r2FinList" autocomplete="off"'), 'พิมพ์ชื่อให้เหมือนเดิมทุกครั้ง', 'r2w_finco'));
   if (kind === 'delivery') {
     h += F('ยอดที่จัดไฟแนนซ์ (บาท)', M('finance_amount', v.finance_amount), '', 'r2w_finamt');
     h += `<div class="r2-warn hidden" id="r2w_finwarn"></div>`;
@@ -5659,6 +5745,7 @@ function r2LedgerRender(code) {
   h += FA('ค่าคอมไฟแนนซ์ (ถ้ามี)', M('finance_commission', L.finance_commission), 'ค่าคอมที่ไฟแนนซ์จ่ายให้ร้าน · ใส่จากหน้า "เงินจากไฟแนนซ์" หรือกรอกเองได้', 'finance_commission');
   h += FA('ยึดเงินจอง', M('forfeited_deposit', L.forfeited_deposit), '', 'forfeited_deposit');
   h += `<div class="field"><label>รายรับอื่น ๆ</label><div id="r2l_otherInc">${(L.other_income || []).map(x => r2RowHtml(x.label, x.amount, null, x.account || '', x.date || '', undefined, 'วันที่รับ')).join('')}</div><button type="button" class="btn btn-ghost btn-sm r2-add" onclick="r2AddRow('r2l_otherInc', null, true, true, false, 'วันที่รับ')">+ เพิ่มแถว</button></div>`;
+  h += F('วันที่ปันผล', r2DateCtl('r2l_settled_date', L.settled_date), sl0 ? 'แก้ได้ — เดือนที่นับกำไรอ้างอิงจากวันที่นี้' : 'ไม่บังคับ — ถ้าเว้นว่าง ตอนกด "ปันผลแล้ว" ระบบใช้วันที่กดปุ่ม');
   h += F('หมายเหตุ', `<textarea id="r2l_note">${escapeHtml(L.note || '')}</textarea>`);
   h += `</div>`;
 
@@ -5797,7 +5884,7 @@ function r2SettleToggle() {
   const { L } = r2LedgerCollect(false);
   const c = r2CostOf(code, L);
   if (!c.hasPrice) { showToast('ยังไม่มีราคาซื้อ — ใส่ราคาซื้อก่อนจึงจะนับกำไรได้', true); return; }
-  const mk = currentMonthKey();
+  const mk = String(L.settled_date || r1TodayStr()).slice(0, 7);
   r2Confirm('กด "ปันผลแล้ว" รถ ' + code + '?', 'ระบบจะนับกำไร/ขาดทุน ' + (c.profit >= 0 ? '+' : '−') + r2M(Math.abs(c.profit)) + ' บาท เข้าเดือน ' + monthKeyLabel(mk) + ' (นับ "กำไร/ขาดทุน" ไม่ใช่ยอดปันผล/ยอดโอนคืนกองกลาง) และบันทึกบัญชีคันนี้พร้อมกัน', 'ยืนยัน', async () => { await r2SaveSettle(code, true); });
 }
 async function r2SaveSettle(code, on) {
@@ -5808,14 +5895,14 @@ async function r2SaveSettle(code, on) {
       const { L } = r2LedgerCollect(false);
       const c = r2CostOf(code, L);
       const d = r2DivCompute(code, L);
-      row = Object.assign({ code }, L, { settled: true, settled_at: now, settled_date: r1TodayStr(), settled_profit: Math.round(c.profit * 100) / 100, settled_income: Math.round(c.income * 100) / 100, settled_cost: Math.round(c.cost * 100) / 100, settled_net: Math.round(d.net * 100) / 100, updated_at: now });
+      row = Object.assign({ code }, L, { settled: true, settled_at: now, settled_date: L.settled_date || r1TodayStr(), settled_profit: Math.round(c.profit * 100) / 100, settled_income: Math.round(c.income * 100) / 100, settled_cost: Math.round(c.cost * 100) / 100, settled_net: Math.round(d.net * 100) / 100, updated_at: now });
     } else {
       row = { code, settled: false, settled_at: null, settled_date: null, settled_profit: null, settled_income: null, settled_cost: null, settled_net: null, updated_at: now };
     }
     const { error } = await sb.from('car_ledger').upsert(row, { onConflict: 'code' });
     if (error) throw error;
     r2Ledger[code] = Object.assign({}, r2Ledger[code] || {}, row);
-    showToast(on ? 'บันทึกว่าปันผลแล้ว — นับกำไรเข้าเดือน ' + monthKeyLabel(currentMonthKey()) : 'ยกเลิกปันผลแล้ว');
+    showToast(on ? 'บันทึกว่าปันผลแล้ว — นับกำไรเข้าเดือน ' + monthKeyLabel(String(row.settled_date).slice(0, 7)) : 'ยกเลิกปันผลแล้ว');
     if (r2LedgerCode === code) r2LedgerRender(code);
     r2RenderLedger();
     reloadR2Ledger();
@@ -5906,6 +5993,10 @@ function r2LedgerCollect(strict) {
     other_income: r2ReadRows('r2l_otherInc'),
     note: (g('note') || '').trim() || null,
   };
+  { const sd = r1ParseDmy(g('settled_date'));
+    if (!has('settled_date')) L.settled_date = old.settled_date || null;
+    else if (sd.ok && sd.iso) L.settled_date = sd.iso;
+    else { L.settled_date = old.settled ? (old.settled_date || null) : null; if (strict && !err && g('settled_date').trim() && !sd.ok) err = 'รูปแบบวันที่ปันผลไม่ถูกต้อง — พิมพ์เป็น วว/ดด/ปปปป'; } }
   if (L.other_expenses.some(x => x.badDate)) { if (strict && !err) err = 'วันที่จ่ายของค่าใช้จ่ายอื่น ๆ ไม่ถูกต้อง — พิมพ์เป็น วว/ดด/ปปปป'; }
   L.other_expenses.forEach(x => { delete x.badDate; });
   if (L.other_income.some(x => x.badDate)) { if (strict && !err) err = 'วันที่รับของรายรับอื่น ๆ ไม่ถูกต้อง — พิมพ์เป็น วว/ดด/ปปปป'; }
@@ -6534,6 +6625,9 @@ function r3RenderAlerts() {
   const expired = tax.filter(t => t.dt != null && t.dt < 0).length;
   h += r3AlertBlock(`ฝ่ายทะเบียน: ภาษีใกล้หมด/หมดแล้ว ${tax.length} คัน${expired ? ' (หมดแล้ว ' + expired + ')' : ''}`, tax.length,
     tax.map(t => row(`switchTab('registry')`, `<b>${escapeHtml(t.code)}</b> ${escapeHtml(r1Title(t.code))}`, t.dt == null ? 'ยังไม่เคยลงข้อมูลภาษี' : (t.dt < 0 ? 'หมดแล้ว ' + (-t.dt) + ' วัน' : 'อีก ' + t.dt + ' วัน'))).join(''), expired > 0);
+  const depC = r4DepConfirmItems();
+  h += r3AlertBlock(`รอเจ้าของคอนเฟิร์มได้รับเงินมัดจำเล่มคืน ${depC.length} คัน`, depC.length,
+    depC.map(x => `<div class="r3-alert-row" onclick="r4ConfirmDeposit('${escapeHtml(x.code)}')"><span><b>${escapeHtml(x.code)}</b> ${escapeHtml(r1Title(x.code))} · ได้คืน ${r2M(x.d.deposit_returned_amount)} จาก ${r2M(x.d.deposit_amount)}${x.diff > 0 ? ' <span class="r2-neg">⚠ ขาด ' + r2M(x.diff) + '</span>' : ''}</span><span class="btn btn-primary btn-sm">คอนเฟิร์ม</span></div>`).join(''), depC.some(x => x.diff > 0));
   h += r3AlertBlock(`ฝ่ายทะเบียน: เงินมัดจำเล่มรอคืน ${dep.length} คัน · ${r2M(dep.reduce((s, x) => s + Number(x.d.deposit_amount || 0), 0))} บาท`, dep.length,
     dep.map(x => row(`switchTab('registry')`, `<b>${escapeHtml(x.code)}</b> ${escapeHtml(r1Title(x.code))}`, r2M(x.d.deposit_amount) + ' บาท' + (x.days != null ? ' · ' + x.days + ' วัน' : ''))).join(''));
   h += r3AlertBlock(`ฝ่ายทะเบียน: เอกสารส่งคุณหญิง ไม่ครบ ${docsMissing.length} คัน · ครบแล้วรอส่ง ${docsReady.length} คัน`, docsMissing.length + docsReady.length,
