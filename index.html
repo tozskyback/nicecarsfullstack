@@ -3806,7 +3806,7 @@ function renderStock() {
     const ownerCell = `<td class="muted">${d && d.owner_seq ? escapeHtml(d.owner_seq) : '—'}</td>`;
     const warrantyCell = `<td>${d ? `<div>รถ ${r1WarrantyHtml(d.warranty_expiry)}</div><div>แบต ${r1WarrantyHtml(d.warranty_battery_expiry)}</div>` : '<span class="muted">—</span>'}</td>`;
     return `
-      <tr data-code="${escapeHtml(r.code)}" onclick="openCarDrawer(this.dataset.code)">
+      <tr data-code="${escapeHtml(r.code)}" onclick="openCarDrawer(this.dataset.code)"${r.st === 'จอง' ? ` style="background:${col}1F;"` : ''}>
         <td>${d && d.key_slot ? `<span class="code-badge">${d.key_slot}</span>` : '<span class="muted">—</span>'}</td>
         <td><span class="code-badge">${escapeHtml(r.code)}</span></td>
         <td class="muted">${d ? escapeHtml([d.plate, d.plate_province].filter(Boolean).join(' ') || '—') : '—'}</td>
