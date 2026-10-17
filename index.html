@@ -900,6 +900,15 @@
             <input type="text" id="buysSearch" placeholder="ค้นหารหัสรถ, รุ่น, สี, ช่องทาง…" oninput="renderBuys()">
           </div>
           <select class="filter-select" id="buysMonth" onchange="renderBuys()"><option value="all">ทุกเดือน</option></select>
+          <select class="filter-select" id="buysType" onchange="renderBuys()"><option value="all">ทุกประเภท</option><option value="cash">ซื้อสด</option><option value="fin">ปิดไฟแนนซ์</option><option value="consign">ฝากขาย</option></select>
+          <select class="filter-select" id="buysChannel" onchange="renderBuys()"><option value="all">ทุกช่องทาง</option></select>
+          <select class="filter-select" id="buysSort" onchange="renderBuys()" title="เรียงลำดับ">
+            <option value="code_asc">เรียง: รหัสรถ น้อย→มาก</option><option value="code_desc">เรียง: รหัสรถ มาก→น้อย</option>
+            <option value="date_desc">เรียง: วันที่ซื้อ ใหม่→เก่า</option><option value="date_asc">เรียง: วันที่ซื้อ เก่า→ใหม่</option>
+            <option value="final_desc">เรียง: ราคาที่จบ มาก→น้อย</option><option value="final_asc">เรียง: ราคาที่จบ น้อย→มาก</option>
+            <option value="sale_desc">เรียง: ราคาขาย มาก→น้อย</option><option value="sale_asc">เรียง: ราคาขาย น้อย→มาก</option>
+            <option value="miles_asc">เรียง: เลขไมล์ น้อย→มาก</option><option value="miles_desc">เรียง: เลขไมล์ มาก→น้อย</option>
+          </select>
         </div>
         <div class="muted" id="buysSummary" style="margin:0 0 10px;"></div>
         <div class="table-wrap">
@@ -3702,16 +3711,45 @@ function renderBuys() {
     sel.value = months.indexOf(cur) !== -1 ? cur : 'all';
   }
   const month = sel.value;
+  const chSel = document.getElementById('buysChannel');
+  const channels = Array.from(new Set(all.map(r => (r.d.purchase_channel || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'th'));
+  const chCur = chSel.value || 'all';
+  if (chSel.dataset.sig !== channels.join('|')) {
+    chSel.innerHTML = '<option value="all">ทุกช่องทาง</option>' + channels.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+    chSel.dataset.sig = channels.join('|');
+    chSel.value = channels.indexOf(chCur) !== -1 ? chCur : 'all';
+  }
+  const chosen = chSel.value, typ = document.getElementById('buysType').value, sortBy = document.getElementById('buysSort').value;
   const q = (document.getElementById('buysSearch').value || '').trim().toLowerCase();
+  const codeCmp = (a, b) => a.code.localeCompare(b.code, undefined, { numeric: true, sensitivity: 'base' });
+  const numCmp = (f, dir) => (a, b) => {   // ค่าว่างอยู่ล่างเสมอ
+    const x = f(a), y = f(b);
+    if (x == null && y == null) return codeCmp(a, b);
+    if (x == null) return 1; if (y == null) return -1;
+    return (dir === 'desc' ? y - x : x - y) || codeCmp(a, b);
+  };
+  const mileOf = r => (r.d.mileage != null && r.d.mileage !== '' && !isNaN(Number(r.d.mileage))) ? Number(r.d.mileage) : null;
+  const sorters = {
+    code_asc: codeCmp, code_desc: (a, b) => codeCmp(b, a),
+    date_desc: (a, b) => (b.date ? 1 : 0) - (a.date ? 1 : 0) || String(b.date).localeCompare(String(a.date)) || codeCmp(a, b),
+    date_asc: (a, b) => (b.date ? 1 : 0) - (a.date ? 1 : 0) || String(a.date).localeCompare(String(b.date)) || codeCmp(a, b),
+    final_desc: numCmp(r => r.final, 'desc'), final_asc: numCmp(r => r.final, 'asc'),
+    sale_desc: numCmp(r => r.sale, 'desc'), sale_asc: numCmp(r => r.sale, 'asc'),
+    miles_asc: numCmp(mileOf, 'asc'), miles_desc: numCmp(mileOf, 'desc'),
+  };
   const rows = all.filter(r => {
     if (month !== 'all' && (r.date || '').slice(0, 7) !== month) return false;
+    if (chosen !== 'all' && (r.d.purchase_channel || '').trim() !== chosen) return false;
+    if (typ === 'consign' && !r.consign) return false;
+    if (typ === 'fin' && r.d.book_status !== 'ปิดไฟแนนซ์') return false;
+    if (typ === 'cash' && (r.consign || r.d.book_status === 'ปิดไฟแนนซ์')) return false;
     if (q) {
       const d = r.d;
       const hay = [r.code, r1Title(r.code), d.color, d.purchase_channel, d.plate, r1YearTxt(d)].join(' ').toLowerCase();
       if (!hay.includes(q)) return false;
     }
     return true;
-  }).sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true, sensitivity: 'base' }));   // เรียงตามรหัสรถ
+  }).sort(sorters[sortBy] || codeCmp);
   r5LastRows = rows;
   const sum = rows.reduce((t, r) => t + (r.final || 0), 0);
   const nPrice = rows.filter(r => r.final != null).length;
@@ -4995,8 +5033,13 @@ function r2RenderDone(wrap, doneIds) {
   }).filter(r => r.month === mk);
   if (search) rows = rows.filter(r => [r2CaseCodeOf(r.any), r.any.car_code, r1Title(r.any.car_code), r.any.customer_name, r.any.customer_phone, r.any.plate].join(' ').toLowerCase().includes(search));
   rows.sort((a, b) => String((b.d || b.b).delivery_date || (b.d || b.b).booking_date || '').localeCompare(String((a.d || a.b).delivery_date || (a.d || a.b).booking_date || '')));
+  const dvRows = rows.filter(r => r.d);
+  const sumOf = f => dvRows.reduce((t, r) => t + (Number(f(r.d)) || 0), 0);
+  const nFin = dvRows.filter(r => r.d.buy_type === 'ไฟแนนซ์').length;
+  const stat = (l, v) => `<div class="stat-card"><div class="num" style="font-size:20px;">${v}</div><div class="lbl">${l}</div></div>`;
+  const summary = dvRows.length ? `<div class="stats" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); margin-bottom:14px;">${stat('ใบส่งมอบเดือนนี้ (ใบ)', dvRows.length)}${stat('ราคาที่ขายไปรวม (บาท)', r2M(sumOf(d => d.sold_price)))}${stat('เงินจองรวม (บาท)', r2M(sumOf(d => d.deposit_amount)))}${stat('ยอดจัดไฟแนนซ์รวม (บาท)', r2M(sumOf(d => d.finance_amount)))}${stat('เงินดาวน์รวม (บาท)', r2M(sumOf(d => d.down_payment)))}${stat('ไฟแนนซ์ / เงินสด (คัน)', nFin + ' / ' + (dvRows.length - nFin))}</div>` : '';
   if (!rows.length) { wrap.innerHTML = '<div class="empty-state"><div class="big">ยังไม่มีรายการที่ส่งมอบแล้วในเดือนนี้</div><div>เสร็จสิ้นเมื่อเจ้าของเต็นท์คอนเฟิร์มสถานะขาย</div></div>'; return; }
-  wrap.innerHTML = `<table><thead><tr><th>วันที่ส่งมอบ</th><th>เคส</th><th>รถ</th><th>ลูกค้า</th>${admin ? '<th>เซลล์</th>' : ''}<th>ราคาที่ขายไป</th><th>เงินจอง</th><th>ใบ</th></tr></thead><tbody>` + rows.map(r => {
+  wrap.innerHTML = summary + `<table><thead><tr><th>วันที่ส่งมอบ</th><th>เคส</th><th>รถ</th><th>ลูกค้า</th>${admin ? '<th>เซลล์</th>' : ''}<th>ราคาที่ขายไป</th><th>เงินจอง</th><th>ใบ</th></tr></thead><tbody>` + rows.map(r => {
     const a = r.any, id = escapeHtml(r.id);
     const dd = r.d && r.d.delivery_date ? fmtDate(r.d.delivery_date) : '—';
     return `<tr>
