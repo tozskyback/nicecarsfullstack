@@ -1618,7 +1618,15 @@ function monthKeyOf(ms) {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
 }
 function currentMonthKey() { return monthKeyOf(Date.now()); }
-function caseMonthKeyOf(c) { return c.closedAt ? monthKeyOf(c.closedAt) : currentMonthKey(); }
+// ขายแล้ว → เดือนของวันที่ส่งมอบรถ (ไม่มีวันที่ส่งมอบ ใช้วันที่ปิดเคสแทน) · เลิกติดตามและสถานะปิดอื่น ๆ → เดือนที่อัปเดตเป็นสถานะนั้น (closedAt)
+function caseMonthKeyOf(c) {
+  if (c.status === SOLD_STATUS) {
+    let dd = c.deliveredDate || '';
+    if (!dd && c.carCode && typeof r2DeliveryByCar === 'function') { try { const dv = r2DeliveryByCar(c.carCode); if (dv && dv.delivery_date) dd = dv.delivery_date; } catch (e) {} }
+    if (dd && /^\d{4}-\d{2}/.test(dd)) return String(dd).slice(0, 7);
+  }
+  return c.closedAt ? monthKeyOf(c.closedAt) : currentMonthKey();
+}
 function monthKeyLabel(key) {
   const [y, m] = key.split('-').map(Number);
   return new Date(y, m - 1, 1).toLocaleDateString('th-TH', { month: 'long', year: 'numeric' });
@@ -3703,7 +3711,7 @@ function renderBuys() {
       if (!hay.includes(q)) return false;
     }
     return true;
-  }).sort((a, b) => (b.date ? 1 : 0) - (a.date ? 1 : 0) || String(b.date).localeCompare(String(a.date)) || a.code.localeCompare(b.code, undefined, { numeric: true, sensitivity: 'base' }));
+  }).sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true, sensitivity: 'base' }));   // เรียงตามรหัสรถ
   r5LastRows = rows;
   const sum = rows.reduce((t, r) => t + (r.final || 0), 0);
   const nPrice = rows.filter(r => r.final != null).length;
