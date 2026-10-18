@@ -103,6 +103,7 @@
   }
   .nav-item:hover { background: rgba(255,255,255,0.06); color: #fff; }
   .nav-item.active { background: var(--steel); color: #fff; }
+  .nav-badge { margin-left: auto; background: var(--danger); color: #fff; font-size: 11.5px; font-weight: 700; border-radius: 10px; padding: 1px 7px; line-height: 1.5; }
   .nav-item .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: 0.55; flex-shrink: 0; }
   .who-pill {
     margin: 4px 12px 0; padding: 9px 10px; border-radius: 7px; font-size: 12.5px; color: #BFD0DD;
@@ -471,6 +472,7 @@
       <h1>ระบบจัดการหลังบ้าน</h1>
     </div>
     <nav class="sidebar-nav">
+      <button class="nav-item hidden" id="ownerNavItem" data-tab="owner" onclick="switchTab('owner')"><span class="dot"></span>งานเจ้าของเต็นท์<span class="nav-badge hidden" id="ownerNavBadge">0</span></button>
       <button class="nav-item active" id="casesNavItem" data-tab="cases" onclick="switchTab('cases')"><span class="dot"></span>เคสลูกค้า</button>
       <button class="nav-item hidden" id="stockNavItem" data-tab="stock" onclick="switchTab('stock')"><span class="dot"></span>สต็อกรถ</button>
       <button class="nav-item hidden" id="buysNavItem" data-tab="buys" onclick="switchTab('buys')"><span class="dot"></span>สรุปรถซื้อเข้า</button>
@@ -526,6 +528,7 @@
           <button class="btn btn-ghost btn-sm" onclick="openYearSummary()">สรุปรายปี</button>
         </div>
 
+        <div id="staleCaseAlert"></div>
         <div class="stats" id="statCards"></div>
 
         <div class="filterbar">
@@ -823,22 +826,66 @@
       </div>
     </div>
 
+    <!-- OWNER TASKS TAB (งานเจ้าของเต็นท์ — แอดมิน) -->
+    <div id="tab-owner" class="hidden">
+      <div class="topbar">
+        <div class="topbar-row">
+          <div>
+            <h2>งานเจ้าของเต็นท์</h2>
+            <p class="sub">รวมงานที่เจ้าของเต็นท์ต้องตามหรือกดยืนยันไว้ที่เดียว — ทำเสร็จแล้วรายการจะหายไปเอง</p>
+          </div>
+        </div>
+      </div>
+      <div class="content" style="max-width:920px;">
+        <section class="r1-section">
+          <h3>1) เคสติดตามที่ไม่ได้รับการอัปเดต <span class="r1-count" id="ownStaleCount">0</span></h3>
+          <p class="r1-sub">เคสสถานะ "ติดตาม" ที่ไม่ได้แก้ช่อง "ความคืบหน้า" เกิน 3 วัน — กดที่เคสเพื่อเปิดดู/ตามเซลล์ (เซลล์เจ้าของเคสเห็นแจ้งเตือนนี้ในหน้าเคสของตัวเองด้วย)</p>
+          <div id="ownStaleList"></div>
+        </section>
+        <section class="r1-section hidden" id="r2SoldPendingSec">
+          <h3>2) คอนเฟิร์มขายรถ <span class="r1-count" id="r2SoldPendingCount">0</span></h3>
+          <p class="r1-sub">เซลล์ตั้งเคสเป็น "ขายแล้ว" แล้ว — กดคอนเฟิร์มเพื่อเปลี่ยนสถานะรถเป็น "ขาย" ทุกส่วน</p>
+          <div id="r2SoldPendingList"></div>
+        </section>
+        <section class="r1-section">
+          <h3>3) รถที่ยังลงขายไม่ครบ <span class="r1-count" id="ownListCount">0</span></h3>
+          <p class="r1-sub">รถที่ยังไม่ขายและเช็กลิสต์ลงขายยังไม่ครบ 5 หัวข้อ — ติ๊กแก้ได้ที่นี่เลย</p>
+          <div id="ownListList"></div>
+        </section>
+        <section class="r1-section">
+          <h3>4) ลง Line ใกล้ครบ 1 เดือน — เฝ้าระวัง / ต้องปรับราคา <span class="r1-count" id="ownLineCount">0</span></h3>
+          <p class="r1-sub">รถที่ติ๊กลง Line แล้ว ใกล้ครบหรือครบ 1 เดือนแล้วแต่ยังไม่ติดจองหรือขาย (นับจาก "วันที่ลง Line") — ปรับราคาแล้วแก้วันที่ลง Line เป็นวันที่ใหม่เพื่อเริ่มนับใหม่</p>
+          <div id="ownLineList"></div>
+        </section>
+        <section class="r1-section">
+          <h3>5) วิดีโอที่ต้องตรวจ/แก้ <span class="r1-count" id="ownVideoCount">0</span></h3>
+          <p class="r1-sub">รอตรวจ (ยังไม่ตรวจ/ต้องแก้) และที่ส่งกลับให้ตัดต่อแก้แล้ว — เลือกผลตรวจได้ที่นี่ ("ผ่าน" = เสร็จแล้ว, "ต้องแก้" = ส่งกลับให้ตัดต่อ)</p>
+          <div id="ownVideoList"></div>
+        </section>
+        <section class="r1-section">
+          <h3>6) Approve ใบส่งมอบ <span class="r1-count" id="ownApproveCount">0</span></h3>
+          <p class="r1-sub">ใบส่งมอบที่เซลล์ทำแล้วแต่ยังไม่ Approved — Approved แล้วเซลล์จะแก้ไม่ได้</p>
+          <div id="ownApproveList"></div>
+        </section>
+        <section class="r1-section">
+          <h3>7) คอนเฟิร์มได้รับเงินมัดจำเล่มคืน <span class="r1-count" id="ownDepCount">0</span></h3>
+          <p class="r1-sub">ฝ่ายทะเบียนบันทึกวันได้คืนแล้ว — กดคอนเฟิร์ม (ถ้าได้คืนไม่ครบ ส่วนต่างจะถูกย้ายเข้าค่าใช้จ่ายให้อัตโนมัติ)</p>
+          <div id="ownDepList"></div>
+        </section>
+      </div>
+    </div>
+
     <!-- REGISTRY TAB (งานทะเบียน) -->
     <div id="tab-registry" class="hidden">
       <div class="topbar">
         <div class="topbar-row">
           <div>
             <h2>งานทะเบียน / งานตัวรถ</h2>
-            <p class="sub">ภาษี เงินมัดจำเล่ม รถส่งคุณหญิง และการลงขายที่ยังไม่ครบ</p>
+            <p class="sub">ภาษี เงินมัดจำเล่ม รถส่งคุณหญิง และการลงขายที่ยังไม่ครบ (งานที่เจ้าของเต็นท์ต้องตัดสินใจ/กดยืนยัน อยู่ที่หมวด "งานเจ้าของเต็นท์")</p>
           </div>
         </div>
       </div>
       <div class="content" style="max-width:920px;">
-        <section class="r1-section hidden" id="r2SoldPendingSec">
-          <h3>รอเจ้าของคอนเฟิร์มขาย <span class="r1-count" id="r2SoldPendingCount">0</span></h3>
-          <p class="r1-sub">เซลล์ตั้งเคสเป็น "ขายแล้ว" แล้ว — กดคอนเฟิร์มเพื่อเปลี่ยนสถานะรถเป็น "ขาย" ทุกส่วน (เห็นเฉพาะเจ้าของเต็นท์)</p>
-          <div id="r2SoldPendingList"></div>
-        </section>
         <section class="r1-section">
           <h3>การต่อภาษี <span class="r1-count" id="r1TaxCount">0</span></h3>
           <p class="r1-sub">รถที่ยังไม่ขาย และภาษีจะหมดภายใน 30 วัน หรือหมดอายุแล้ว</p>
@@ -1603,6 +1650,7 @@ function rowToCase(r) {
     salesPerson: r.sales_person, status: r.status, notes: r.notes,
     lastUpdated: r.last_updated, createdAt: r.created_at, closedAt: r.closed_at || null,
     deliveredDate: r.delivered_date || null, soldConfirmed: !!r.sold_confirmed, soldConfirmedAt: r.sold_confirmed_at || null,
+    progressUpdatedAt: r.progress_updated_at || null,
   };
 }
 function caseToRow(c) {
@@ -1613,6 +1661,7 @@ function caseToRow(c) {
     sales_person: c.salesPerson, status: c.status, notes: c.notes,
     last_updated: c.lastUpdated, created_at: c.createdAt, closed_at: c.closedAt === undefined ? null : c.closedAt,
     delivered_date: c.deliveredDate || null, sold_confirmed: !!c.soldConfirmed, sold_confirmed_at: c.soldConfirmedAt || null,
+    progress_updated_at: c.progressUpdatedAt || null,
   };
 }
 
@@ -1763,6 +1812,7 @@ function enterApp() {
   document.getElementById('whoName').textContent = session.displayName;
   document.getElementById('whoRole').textContent = session.role === 'admin' ? 'แอดมิน (เห็นทุกเคส)' : roleLabel(session.role);
   if (isAdmin()) {
+    document.getElementById('ownerNavItem').classList.remove('hidden');
     document.getElementById('usersNavItem').classList.remove('hidden');
     document.getElementById('carsNavItem').classList.remove('hidden');
     document.getElementById('brokersNavItem').classList.remove('hidden');
@@ -1819,6 +1869,7 @@ async function reloadCases() {
     cases = data.map(rowToCase);
     renderMonthBar();
     renderStats();
+    renderOwnerTasks();
     renderTable();
     renderCarList();
     renderBrokerList();
@@ -1845,6 +1896,7 @@ async function reloadVideos() {
     renderVideoList();
     populatePostPlanSelects();
     renderPostPlanCalendar();
+    renderOwnerTasks();
   } catch (e) { showToast('โหลดข้อมูลวิดีโอไม่สำเร็จ: ' + e.message, true); }
 }
 async function reloadWeeklyPosts() {
@@ -1927,6 +1979,7 @@ function populateStaticSelects() {
 function switchTab(tab) {
   document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   document.getElementById('tab-cases').classList.toggle('hidden', tab !== 'cases');
+  document.getElementById('tab-owner').classList.toggle('hidden', tab !== 'owner');
   document.getElementById('tab-cars').classList.toggle('hidden', tab !== 'cars');
   document.getElementById('tab-brokers').classList.toggle('hidden', tab !== 'brokers');
   document.getElementById('tab-users').classList.toggle('hidden', tab !== 'users');
@@ -1941,6 +1994,7 @@ function switchTab(tab) {
   document.getElementById('tab-overview').classList.toggle('hidden', tab !== 'overview');
   document.getElementById('tab-finrec').classList.toggle('hidden', tab !== 'finrec');
   document.getElementById('tab-monthly').classList.toggle('hidden', tab !== 'monthly');
+  if (tab === 'owner') renderOwnerTasks();
   if (tab === 'stock') renderStock();
   if (tab === 'registry') renderRegistry();
   if (tab === 'buys') renderBuys();
@@ -2133,6 +2187,47 @@ function renderStats() {
     <div class="stat-card"><div class="num" style="color:${statusMeta(SOLD_STATUS).color}">${sold}</div><div class="lbl">ขายแล้ว</div></div>
     <div class="stat-card"><div class="num">${closed}</div><div class="lbl">ปิดเคส / ยกเลิก</div></div>
   `;
+  renderStaleCaseAlert();
+}
+
+/* เคสสถานะ "ติดตาม" ที่ไม่ได้แก้ช่อง "ความคืบหน้า" เกิน 3 วัน
+   นับเป็นวันตามปฏิทิน (วันนี้ − วันที่แก้ความคืบหน้าล่าสุด > 3) · ดูทุกเดือน เพราะเคสที่ยังติดตามอยู่จะรวมอยู่เดือนปัจจุบันเสมอ
+   เซลล์เห็นเฉพาะเคสของตัวเองที่หน้าเคสลูกค้า · เจ้าของเต็นท์ (แอดมิน) ดูที่หมวด "งานเจ้าของเต็นท์" */
+const STALE_CASE_DAYS = 3;
+function staleCaseSince(c) { return Number(c.progressUpdatedAt) || Number(c.lastUpdated) || Number(c.createdAt) || 0; }
+function staleCaseDays(c) {
+  const t = staleCaseSince(c);
+  if (!t) return null;
+  const a = new Date(t), b = new Date();
+  const d0 = Date.UTC(a.getFullYear(), a.getMonth(), a.getDate());
+  const d1 = Date.UTC(b.getFullYear(), b.getMonth(), b.getDate());
+  return Math.round((d1 - d0) / 86400000);
+}
+function staleCaseItems(list) {
+  return list
+    .filter(c => c.status === 'ติดตาม')
+    .map(c => ({ c, days: staleCaseDays(c) }))
+    .filter(x => x.days !== null && x.days > STALE_CASE_DAYS)
+    .sort((x, y) => y.days - x.days);
+}
+function staleCaseRowsHtml(rows, showSales) {
+  return rows.map(({ c, days }) => `
+    <div class="r3-alert-row" onclick="openCaseDrawer('${c.id}')">
+      <span><b>${escapeHtml(c.caseCode || '—')}</b> · ${escapeHtml(c.carCode || '—')} ${escapeHtml(c.carModel || '')} · ${escapeHtml(c.customerName || '—')}${showSales ? ' · เซลล์ ' + escapeHtml(salesDisplayName(c.salesPerson)) : ''}</span>
+      <span class="muted">ไม่อัปเดตความคืบหน้า ${days} วัน (ล่าสุด ${fmtDate(staleCaseSince(c))})</span>
+    </div>`).join('');
+}
+function renderStaleCaseAlert() {
+  const el = document.getElementById('staleCaseAlert');
+  if (!el) return;
+  if (isAdmin()) { el.innerHTML = ''; return; }
+  const rows = staleCaseItems(currentList());
+  if (!rows.length) { el.innerHTML = ''; return; }
+  el.innerHTML = `
+    <details class="r3-alert red" open>
+      <summary><span>⚠ เคสของคุณที่ติดตามแต่ไม่ได้อัปเดตความคืบหน้าเกิน ${STALE_CASE_DAYS} วัน ${rows.length} เคส</span><span class="muted" style="font-weight:400;">กดที่เคสเพื่อเปิดและอัปเดตความคืบหน้า</span></summary>
+      <div class="r3-alert-body">${staleCaseRowsHtml(rows, false)}</div>
+    </details>`;
 }
 
 /* ---------------- Table ---------------- */
@@ -3161,8 +3256,16 @@ async function saveCase() {
   }
 
   // เคสที่เปิดอยู่ (ติดตาม/ติดจอง) ไม่มีวันที่ปิด — จะถือว่าอยู่เดือนปัจจุบันเสมอ
-  // เคสที่ปิดแล้ว จะจำวันที่ปิดครั้งแรกไว้ ไม่ขยับเดือนตามการแก้ไขภายหลัง
-  const closedAt = isOpenStatus(newStatus) ? null : ((existing && existing.closedAt) ? existing.closedAt : Date.now());
+  // เคสที่ปิดแล้ว: ถ้าสถานะไม่เปลี่ยน คงวันที่ปิดเดิมไว้ (แก้ข้อมูลอื่นไม่ขยับเดือน)
+  // แต่ถ้าเปลี่ยนไปเป็นสถานะปิดอื่น (เช่น ขายแล้ว → เลิกติดตาม) ให้นับวันที่เปลี่ยนจริงเป็นวันที่ปิดใหม่
+  const closedAt = isOpenStatus(newStatus) ? null
+    : ((existing && existing.closedAt && prevStatus === newStatus) ? existing.closedAt : Date.now());
+
+  // วันที่แก้ช่อง "ความคืบหน้า" ล่าสุด — ใช้เตือนเคสติดตามที่ไม่ได้อัปเดต (เปลี่ยนเฉพาะเมื่อข้อความความคืบหน้าเปลี่ยน)
+  const notesNew = document.getElementById('f_notes').value.trim();
+  const progressUpdatedAt = !existing ? Date.now()
+    : (((existing.notes || '').trim() !== notesNew) ? Date.now()
+      : (existing.progressUpdatedAt || existing.lastUpdated || existing.createdAt || Date.now()));
 
   const payload = {
     caseCode, carCode, carModel,
@@ -3172,7 +3275,8 @@ async function saveCase() {
     channel, brokerCode, channelOther,
     salesPerson,
     status: newStatus,
-    notes: document.getElementById('f_notes').value.trim(),
+    notes: notesNew,
+    progressUpdatedAt,
     lastUpdated: Date.now(),
     createdAt: existing ? existing.createdAt : Date.now(),
     closedAt,
@@ -3598,7 +3702,7 @@ function r1ApplyNavOrder() {
   const byId = {};
   items.forEach(el => { byId[el.id] = el; });
   const ordered = saved.filter(id => byId[id]).map(id => byId[id]);
-  items.forEach(el => { if (!ordered.includes(el)) ordered.push(el); });
+  items.forEach(el => { if (!ordered.includes(el)) { if (el.id === 'ownerNavItem') ordered.unshift(el); else ordered.push(el); } });
   ordered.forEach(el => nav.insertBefore(el, btn));
 }
 function r1ToggleNavSort() {
@@ -3635,6 +3739,7 @@ function r1MoveNav(el, dir) {
 function r1RenderAll() {
   renderStock();
   renderRegistry();
+  renderOwnerTasks();
   renderBuys();
   r1RenderAlerts();
   renderR2Docs();
@@ -3647,13 +3752,14 @@ function r1RenderAlerts() {
   const el = document.getElementById('r1AlertStrip');
   if (!el) return;
   if (!isAdmin()) { el.classList.add('hidden'); return; }
-  const tax = r1TaxItems(), dep = r1DepositItems(), docs = r1DocItems(), lst = r1ListingItems();
+  const tax = r1TaxItems(), dep = r1DepositItems(), docs = r1DocItems();
   const chips = [];
+  const ownN = ownerTaskTotal();
+  if (ownN) chips.unshift(`<button class="alert-chip red" onclick="switchTab('owner')">งานเจ้าของเต็นท์ ${ownN} รายการ</button>`);
   if (tax.length) {
     const expired = tax.filter(t => t.dt != null && t.dt < 0).length;
     chips.push(`<button class="alert-chip ${expired ? 'red' : ''}" onclick="switchTab('registry')">ภาษีใกล้หมด/หมดแล้ว/ยังไม่ลงข้อมูล ${tax.length} คัน${expired ? ' (หมดแล้ว ' + expired + ')' : ''}</button>`);
   }
-  if (lst.length) chips.push(`<button class="alert-chip" onclick="switchTab('registry')">ลงขายยังไม่ครบ ${lst.length} คัน</button>`);
   if (dep.length) {
     const sum = dep.reduce((s, x) => s + Number(x.d.deposit_amount || 0), 0);
     chips.push(`<button class="alert-chip" onclick="switchTab('registry')">เงินมัดจำเล่มรอคืน ${dep.length} คัน · ${fmtMoney(sum)} บาท</button>`);
@@ -4267,7 +4373,8 @@ function renderRegistry() {
   // เงินมัดจำเล่ม
   const dep = r1DepositItems();
   const depC = r4DepConfirmItems();
-  const depCHtml = depC.map(x => `
+  const depCShown = isAdmin() ? [] : depC;   // เจ้าของเต็นท์ (แอดมิน) กดคอนเฟิร์มที่หมวด "งานเจ้าของเต็นท์"
+  const depCHtml = depCShown.map(x => `
     <div class="r1-row" style="border-left:3px solid #C97F00;">
       <div class="main">${tag(x.code)}<div class="muted" style="margin-top:2px;">ได้คืนแล้ว ${x.d.deposit_returned_date ? r1FmtDmy(x.d.deposit_returned_date) : ''} · <b>${isAdmin() ? 'รอคุณกดคอนเฟิร์ม' : 'รอเจ้าของเต็นท์คอนเฟิร์ม'}</b></div></div>
       <div class="meta">
@@ -4276,8 +4383,8 @@ function renderRegistry() {
         ${isAdmin() ? btn('คอนเฟิร์มได้คืน', 'r4ConfirmDeposit', x.code, 'btn-primary') : ''}
       </div>
     </div>`).join('');
-  document.getElementById('r1DepCount').textContent = dep.length + depC.length;
-  document.getElementById('r1DepCount').classList.toggle('warn', dep.length + depC.length > 0);
+  document.getElementById('r1DepCount').textContent = dep.length + depCShown.length;
+  document.getElementById('r1DepCount').classList.toggle('warn', dep.length + depCShown.length > 0);
   document.getElementById('r1DepList').innerHTML = depCHtml + (dep.length ? dep.map(x => `
     <div class="r1-row">
       <div class="main">${tag(x.code)}${x.d.closing_finance ? `<div class="muted" style="margin-top:2px;">ไฟแนนซ์: ${escapeHtml(x.d.closing_finance)}</div>` : ''}</div>
@@ -4287,7 +4394,7 @@ function renderRegistry() {
         ${btn('บันทึกได้คืน', 'openDepositModal', x.code, 'btn-primary')}
         ${r3DelBtn('deposit', x.code)}
       </div>
-    </div>`).join('') : (depC.length ? '' : '<div class="muted">ไม่มีเงินมัดจำเล่มที่รอคืน</div>'));
+    </div>`).join('') : (depCShown.length ? '' : '<div class="muted">ไม่มีเงินมัดจำเล่มที่รอคืน</div>'));
 
   // เอกสารส่งคุณหญิง
   const docs = r1DocItems();
@@ -4305,45 +4412,25 @@ function renderRegistry() {
       </div>
     </div>`).join('') : '<div class="muted">ไม่มีรถที่รอส่งเอกสาร</div>';
 
-  // ลงขายยังไม่ครบ (แก้ติ๊กได้ในหน้านี้เลย)
-  const lst = r1ListingItems();
-  document.getElementById('r1ListCount').textContent = lst.length;
-  document.getElementById('r1ListCount').classList.toggle('warn', lst.length > 0);
-  document.getElementById('r1ListList').innerHTML = lst.length ? lst.map(x => `
-    <div class="r1-row">
-      <div class="main">${tag(x.code)}
-        <div class="muted" style="margin-top:2px;">ยังไม่ได้ทำ: ${x.missing.map(escapeHtml).join(', ')}</div>
-        ${x.d.list_line && r4InStockTxt(x.d) ? `<div style="margin-top:4px; font-size:13px; font-weight:600; color:#9A5F00;">${escapeHtml(r4InStockTxt(x.d))}</div>` : ''}
-        ${x.d.list_line ? `<div style="margin-top:6px; display:flex; gap:8px; align-items:center;" onclick="event.stopPropagation()"><span class="muted">วันที่ลง Line</span>${r4DateCombo(null, x.d.list_line_date, { small: true, attrs: ' data-code="' + escapeHtml(x.code) + '" onchange="r4SetLineDate(this.dataset.code, this.value)"' })}</div>` : ''}
-        <div style="margin-top:6px;">${r3DelBtn('listing', x.code)}</div>
-      </div>
-      <div class="check-grid">${R1_LISTINGS.map(([k, l]) =>
-        `<label><input type="checkbox" ${x.d[k] ? 'checked' : ''} data-code="${escapeHtml(x.code)}" data-key="${k}" onchange="r1ToggleListing(this.dataset.code, this.dataset.key, this.checked)">${l}</label>`).join('')}</div>
-    </div>`).join('') : '<div class="muted">รถทุกคันในสต็อกลงขายครบแล้ว</div>';
-
-  // ลง Line ใกล้ครบ 1 เดือน
-  const lw = r4LineWatchItems();
+  // ลงขายยังไม่ครบ + ลง Line ใกล้ครบ 1 เดือน: เจ้าของเต็นท์ (แอดมิน) ดูที่หมวด "งานเจ้าของเต็นท์" · ฝ่ายทะเบียน/คนอื่นยังเห็นที่หน้านี้
+  const adm = isAdmin();
+  const lstSec = document.getElementById('r1ListList').closest('section');
+  if (lstSec) lstSec.classList.toggle('hidden', adm);
   const lwSec = document.getElementById('r4LineWatchSec');
-  if (lwSec) {
-    const nd = r4LineNoDateItems();
-    lwSec.classList.toggle('hidden', !lw.length && !nd.length);
-    document.getElementById('r4LineWatchCount').textContent = lw.length;
-    document.getElementById('r4LineWatchCount').classList.toggle('warn', lw.length > 0);
-    document.getElementById('r4LineWatchList').innerHTML = lw.map(x => `
-      <div class="r1-row">
-        <div class="main">${tag(x.code)}
-          <div class="muted" style="margin-top:2px;">ลง Line ${r1FmtDmy(x.d.list_line_date)} · ผ่านมา ${x.days} วัน${Number(x.d.sale_price) > 0 ? ' · ราคาขาย ' + fmtMoney(x.d.sale_price) + ' บาท' : ''}${r4CostNowTxt(x.code) ? ' · <b>' + escapeHtml(r4CostNowTxt(x.code)) + '</b>' : ''}</div>
-          ${r4InStockTxt(x.d) ? `<div style="margin-top:2px; font-size:13px; font-weight:600; color:#9A5F00;">${escapeHtml(r4InStockTxt(x.d))}</div>` : ''}
-        </div>
-        <div class="meta">
-          <span class="badge" style="background:${x.due ? '#C0392B18' : '#C97F0018'}; color:${x.due ? '#C0392B' : '#C97F00'};"><span class="dot"></span>${x.due ? 'ครบ 1 เดือนแล้ว — ต้องปรับราคา' : 'ใกล้ครบ 1 เดือน — เฝ้าระวัง'}</span>
-          ${btn('เปิดข้อมูล / ปรับราคา', 'r4OpenStockSec', x.code)}
-        </div>
-      </div>`).join('') + (nd.length ? `<div class="muted" style="margin:12px 0 6px;">ติ๊ก Line แล้วแต่ยังไม่มีวันที่ลง — เลือกวันที่เพื่อเริ่มนับ 1 เดือน (${nd.length} คัน)</div>` + nd.map(x => `
-      <div class="r1-row">
-        <div class="main">${tag(x.code)}${r4InStockTxt(x.d) ? `<div class="muted" style="margin-top:2px;">${escapeHtml(r4InStockTxt(x.d))}</div>` : ''}</div>
-        <div class="meta">${r4DateCombo(null, '', { small: true, attrs: ' data-code="' + escapeHtml(x.code) + '" onchange="r4SetLineDate(this.dataset.code, this.value)"' })}</div>
-      </div>`).join('') : '');
+  if (adm) {
+    if (lwSec) lwSec.classList.add('hidden');
+  } else {
+    const L = r5ListingBlock();
+    document.getElementById('r1ListCount').textContent = L.count;
+    document.getElementById('r1ListCount').classList.toggle('warn', L.count > 0);
+    document.getElementById('r1ListList').innerHTML = L.html;
+    if (lwSec) {
+      const W = r5LineWatchBlock();
+      lwSec.classList.toggle('hidden', !W.total);
+      document.getElementById('r4LineWatchCount').textContent = W.lw.length;
+      document.getElementById('r4LineWatchCount').classList.toggle('warn', W.lw.length > 0);
+      document.getElementById('r4LineWatchList').innerHTML = W.html;
+    }
   }
   r4OrderRegistry();
 
@@ -4367,6 +4454,138 @@ function renderRegistry() {
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2m2 0v14a1 1 0 01-1 1H7a1 1 0 01-1-1V6h12z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
     </div>`).join('') : '<div class="muted">ยังไม่มีโน้ต</div>';
+}
+
+/* ---------- ส่วนที่ใช้ร่วมกัน: หน้างานทะเบียน (ฝ่ายทะเบียน) และหมวด "งานเจ้าของเต็นท์" ---------- */
+function r5Tag(code) { return `<span class="code-badge">${escapeHtml(code)}</span> <span style="margin-left:8px; font-weight:600;">${escapeHtml(r1Title(code))}</span>`; }
+function r5Btn(label, fn, code, cls) { return `<button class="btn ${cls || 'btn-ghost'} btn-sm" data-code="${escapeHtml(code)}" onclick="event.stopPropagation(); ${fn}(this.dataset.code)">${label}</button>`; }
+/* ลงขายยังไม่ครบ (แก้ติ๊กได้เลย) */
+function r5ListingBlock() {
+  const lst = r1ListingItems();
+  const html = lst.length ? lst.map(x => `
+    <div class="r1-row">
+      <div class="main">${r5Tag(x.code)}
+        <div class="muted" style="margin-top:2px;">ยังไม่ได้ทำ: ${x.missing.map(escapeHtml).join(', ')}</div>
+        ${x.d.list_line && r4InStockTxt(x.d) ? `<div style="margin-top:4px; font-size:13px; font-weight:600; color:#9A5F00;">${escapeHtml(r4InStockTxt(x.d))}</div>` : ''}
+        ${x.d.list_line ? `<div style="margin-top:6px; display:flex; gap:8px; align-items:center;" onclick="event.stopPropagation()"><span class="muted">วันที่ลง Line</span>${r4DateCombo(null, x.d.list_line_date, { small: true, attrs: ' data-code="' + escapeHtml(x.code) + '" onchange="r4SetLineDate(this.dataset.code, this.value)"' })}</div>` : ''}
+        <div style="margin-top:6px;">${r3DelBtn('listing', x.code)}</div>
+      </div>
+      <div class="check-grid">${R1_LISTINGS.map(([k, l]) =>
+        `<label><input type="checkbox" ${x.d[k] ? 'checked' : ''} data-code="${escapeHtml(x.code)}" data-key="${k}" onchange="r1ToggleListing(this.dataset.code, this.dataset.key, this.checked)">${l}</label>`).join('')}</div>
+    </div>`).join('') : '<div class="muted">รถทุกคันในสต็อกลงขายครบแล้ว</div>';
+  return { count: lst.length, html };
+}
+/* ลง Line ใกล้ครบ 1 เดือน — เฝ้าระวัง / ต้องปรับราคา */
+function r5LineWatchBlock() {
+  const lw = r4LineWatchItems(), nd = r4LineNoDateItems();
+  const html = lw.map(x => `
+      <div class="r1-row">
+        <div class="main">${r5Tag(x.code)}
+          <div class="muted" style="margin-top:2px;">ลง Line ${r1FmtDmy(x.d.list_line_date)} · ผ่านมา ${x.days} วัน${Number(x.d.sale_price) > 0 ? ' · ราคาขาย ' + fmtMoney(x.d.sale_price) + ' บาท' : ''}${r4CostNowTxt(x.code) ? ' · <b>' + escapeHtml(r4CostNowTxt(x.code)) + '</b>' : ''}</div>
+          ${r4InStockTxt(x.d) ? `<div style="margin-top:2px; font-size:13px; font-weight:600; color:#9A5F00;">${escapeHtml(r4InStockTxt(x.d))}</div>` : ''}
+        </div>
+        <div class="meta">
+          <span class="badge" style="background:${x.due ? '#C0392B18' : '#C97F0018'}; color:${x.due ? '#C0392B' : '#C97F00'};"><span class="dot"></span>${x.due ? 'ครบ 1 เดือนแล้ว — ต้องปรับราคา' : 'ใกล้ครบ 1 เดือน — เฝ้าระวัง'}</span>
+          ${r5Btn('เปิดข้อมูล / ปรับราคา', 'r4OpenStockSec', x.code)}
+        </div>
+      </div>`).join('') + (nd.length ? `<div class="muted" style="margin:12px 0 6px;">ติ๊ก Line แล้วแต่ยังไม่มีวันที่ลง — เลือกวันที่เพื่อเริ่มนับ 1 เดือน (${nd.length} คัน)</div>` + nd.map(x => `
+      <div class="r1-row">
+        <div class="main">${r5Tag(x.code)}${r4InStockTxt(x.d) ? `<div class="muted" style="margin-top:2px;">${escapeHtml(r4InStockTxt(x.d))}</div>` : ''}</div>
+        <div class="meta">${r4DateCombo(null, '', { small: true, attrs: ' data-code="' + escapeHtml(x.code) + '" onchange="r4SetLineDate(this.dataset.code, this.value)"' })}</div>
+      </div>`).join('') : '');
+  return { lw, nd, html, total: lw.length + nd.length };
+}
+
+/* ---------- หมวด "งานเจ้าของเต็นท์" (แอดมิน) ---------- */
+function ownerTaskLists() {
+  const stale = staleCaseItems(cases);
+  const sold = typeof r2PendingSoldCases === 'function' ? r2PendingSoldCases() : [];
+  const listing = r1ListingItems();
+  const lw = r4LineWatchItems(), nd = r4LineNoDateItems();
+  const video = Array.isArray(videos) ? videos.filter(videoNeedsReview) : [];
+  const approve = Object.values(r2Deliveries || {}).filter(d => d && !d.approved)
+    .sort((a, b) => String(a.delivery_date || '').localeCompare(String(b.delivery_date || '')));
+  const dep = r4DepConfirmItems();
+  return { stale, sold, listing, lw, nd, video, approve, dep };
+}
+function ownerTaskCounts() {
+  const t = ownerTaskLists();
+  const c = { stale: t.stale.length, sold: t.sold.length, listing: t.listing.length, line: t.lw.length + t.nd.length, video: t.video.length, approve: t.approve.length, dep: t.dep.length };
+  c.total = c.stale + c.sold + c.listing + c.line + c.video + c.approve + c.dep;
+  return c;
+}
+function ownerTaskTotal() { return isAdmin() ? ownerTaskCounts().total : 0; }
+function renderOwnerTasks() {
+  if (!isAdmin()) return;
+  const badge = document.getElementById('ownerNavBadge');
+  const root = document.getElementById('tab-owner');
+  if (!badge || !root) return;
+  let c;
+  try { c = ownerTaskCounts(); } catch (e) { return; }   // ข้อมูลบางส่วนยังโหลดไม่เสร็จ
+  badge.textContent = c.total;
+  badge.classList.toggle('hidden', c.total === 0);
+  const setCount = (id, n) => { const el = document.getElementById(id); if (!el) return; el.textContent = n; el.classList.toggle('warn', n > 0); };
+  const t = ownerTaskLists();
+
+  // 1) เคสติดตามที่ไม่ได้อัปเดต
+  setCount('ownStaleCount', t.stale.length);
+  document.getElementById('ownStaleList').innerHTML = t.stale.length
+    ? `<div class="r3-alert red" style="border-left-width:4px;"><div class="r3-alert-body" style="padding-top:4px;">${staleCaseRowsHtml(t.stale, true)}</div></div>`
+    : '<div class="muted">ไม่มีเคสติดตามที่ค้างอัปเดตเกิน ' + STALE_CASE_DAYS + ' วัน</div>';
+
+  // 2) คอนเฟิร์มขายรถ (ใช้ตัวเรนเดอร์เดิม)
+  if (typeof r2RenderSoldPending === 'function') r2RenderSoldPending();
+
+  // 3) ลงขายยังไม่ครบ
+  const L = r5ListingBlock();
+  setCount('ownListCount', L.count);
+  document.getElementById('ownListList').innerHTML = L.html;
+
+  // 4) ลง Line ใกล้ครบ 1 เดือน
+  const W = r5LineWatchBlock();
+  setCount('ownLineCount', W.total);
+  document.getElementById('ownLineList').innerHTML = W.total ? W.html : '<div class="muted">ไม่มีรถที่ลง Line ใกล้ครบ 1 เดือน</div>';
+
+  // 5) วิดีโอที่ต้องตรวจ/แก้
+  setCount('ownVideoCount', t.video.length);
+  const APPR = [APPROVAL_PENDING, APPROVAL_PASS, APPROVAL_REVISE];
+  document.getElementById('ownVideoList').innerHTML = t.video.length ? t.video.map(v => {
+    const sentBack = v.status === VIDEO_STATUS_EDITING;   // ต้องแก้ และส่งกลับให้ตัดต่อแล้ว
+    return `<div class="r1-row">
+      <div class="main"><span class="code-badge">${escapeHtml(v.code)}</span> <span style="margin-left:8px; font-weight:600;">${escapeHtml(v.title || '')}</span>
+        <div class="muted" style="margin-top:2px;">${sentBack ? 'ส่งกลับให้ตัดต่อแก้แล้ว — รอแก้เสร็จ' : 'รอตรวจ · ผลตรวจ: ' + escapeHtml(v.approvalStatus)}${v.note ? ' · ' + escapeHtml(v.note) : ''}</div></div>
+      <div class="meta">
+        ${v.link ? `<a href="${escapeHtml(v.link)}" target="_blank" rel="noopener" class="phone-link" onclick="event.stopPropagation()">เปิดลิงก์</a>` : '<span class="muted">ยังไม่มีลิงก์</span>'}
+        <select onchange="setVideoApproval('${escapeHtml(String(v.id))}', this.value)">${APPR.map(x => `<option value="${x}" ${x === v.approvalStatus ? 'selected' : ''}>${x}</option>`).join('')}</select>
+      </div>
+    </div>`;
+  }).join('') : '<div class="muted">ไม่มีวิดีโอที่รอตรวจ/แก้</div>';
+
+  // 6) Approve ใบส่งมอบ
+  setCount('ownApproveCount', t.approve.length);
+  document.getElementById('ownApproveList').innerHTML = t.approve.length ? t.approve.map(rec => {
+    const id = escapeHtml(String(rec.case_id));
+    return `<div class="r1-row" style="cursor:pointer;" data-id="${id}" onclick="openR2Doc('delivery', this.dataset.id)">
+      <div class="main">${rec.car_code ? r5Tag(rec.car_code) : '<span class="muted">ไม่มีรหัสรถ</span>'}
+        <div class="muted" style="margin-top:2px;">เคส ${escapeHtml(r2CaseCodeOf(rec) || '—')} · ${escapeHtml(rec.customer_name || '—')} · เซลล์ ${escapeHtml(salesDisplayName(r2SalesOf(rec)))} · ออกรถ ${rec.delivery_date ? r1FmtDmy(rec.delivery_date) : '—'} · ราคาที่ขายไป ${r2M(rec.sold_price)}</div></div>
+      <div class="meta">
+        <button class="btn btn-ghost btn-sm" data-id="${id}" onclick="event.stopPropagation(); openR2Doc('delivery', this.dataset.id)">ดูใบส่งมอบ</button>
+        <button class="btn btn-primary btn-sm" data-id="${id}" onclick="event.stopPropagation(); r2SetApproved(this.dataset.id, true)">Approved ✓</button>
+      </div>
+    </div>`;
+  }).join('') : '<div class="muted">ไม่มีใบส่งมอบที่รอ Approved</div>';
+
+  // 7) คอนเฟิร์มเงินมัดจำเล่มคืน
+  setCount('ownDepCount', t.dep.length);
+  document.getElementById('ownDepList').innerHTML = t.dep.length ? t.dep.map(x => `
+    <div class="r1-row" style="border-left:3px solid #C97F00;">
+      <div class="main">${r5Tag(x.code)}<div class="muted" style="margin-top:2px;">ได้คืนแล้ว ${x.d.deposit_returned_date ? r1FmtDmy(x.d.deposit_returned_date) : ''}</div></div>
+      <div class="meta">
+        <span>จ่าย <b>${fmtMoney(x.d.deposit_amount)}</b> · ได้คืน <b>${x.d.deposit_returned_amount != null ? fmtMoney(x.d.deposit_returned_amount) : '—'}</b> บาท</span>
+        ${x.diff > 0 ? `<span class="r2-neg">⚠ ขาด ${fmtMoney(x.diff)} บาท</span>` : ''}
+        ${r5Btn('คอนเฟิร์มได้คืน', 'r4ConfirmDeposit', x.code, 'btn-primary')}
+      </div>
+    </div>`).join('') : '<div class="muted">ไม่มีเงินมัดจำเล่มที่รอคอนเฟิร์ม</div>';
 }
 
 const R4_LINE_WARN_DAYS = 25;   // ลง Line มาแล้วตั้งแต่ 25 วัน = ใกล้ครบ 1 เดือน (เฝ้าระวัง)
@@ -4401,18 +4620,13 @@ function r4LineNoDateItems() {
   return out;
 }
 function r4OpenStockSec(code) { openCarDrawer(code, 'stock'); }
-/* เฉพาะเจ้าของเต็นท์: รอคอนเฟิร์มขาย + ลงขายยังไม่ครบ ขึ้นไว้บนสุด · คนอื่นลำดับเดิม */
+/* ลำดับส่วนในหน้างานทะเบียน (ฝ่ายทะเบียน): ลงขายยังไม่ครบ + ลง Line ใกล้ครบ ก่อนโน้ต */
 function r4OrderRegistry() {
   const q = id => { const el = document.getElementById(id); return el && el.closest ? el.closest('section') : null; };
-  const sold = document.getElementById('r2SoldPendingSec'), lst = q('r1ListList'), watch = document.getElementById('r4LineWatchSec'), notes = q('r1NoteList');
+  const lst = q('r1ListList'), watch = document.getElementById('r4LineWatchSec'), notes = q('r1NoteList');
   if (!lst || !notes) return;
-  if (isAdmin() && sold) {
-    sold.after(lst);
-    if (watch) lst.after(watch);
-  } else {
-    notes.before(lst);
-    if (watch) lst.after(watch);
-  }
+  notes.before(lst);
+  if (watch) lst.after(watch);
 }
 async function r4SetLineDate(code, val) {
   const p = r1ParseDmy(val);
@@ -4760,6 +4974,7 @@ function setupRound2Nav() {
   }
 }
 function r2RenderAll() {
+  renderOwnerTasks();
   renderR2Docs();
   renderR2Comm();
   r2RenderLedger();
@@ -6659,32 +6874,28 @@ function r3RenderAlerts() {
   if (!box) return;
   const finWait = r3FinRows().filter(r => !r.got);
   const tr = r3TransferPending();
-  const pend = r2PendingSoldCases();
-  const tax = r1TaxItems(), dep = r1DepositItems(), lst = r1ListingItems();
+  const tax = r1TaxItems(), dep = r1DepositItems();
   const gaps = r3StockGaps();
   const docs = r1DocItems(), docsMissing = docs.filter(x => !x.complete), docsReady = docs.filter(x => x.complete);
   const row = (click, l, r) => `<div class="r3-alert-row" onclick="${click}"><span>${l}</span><span class="muted">${r}</span></div>`;
   let h = '';
+  const oc = ownerTaskCounts();
+  const ownRows = [['เคสติดตามที่ไม่ได้อัปเดต', oc.stale], ['คอนเฟิร์มขายรถ', oc.sold], ['รถที่ยังลงขายไม่ครบ', oc.listing], ['ลง Line ใกล้ครบ 1 เดือน', oc.line], ['วิดีโอที่ต้องตรวจ/แก้', oc.video], ['Approve ใบส่งมอบ', oc.approve], ['คอนเฟิร์มเงินมัดจำเล่มคืน', oc.dep]].filter(x => x[1] > 0);
+  h += r3AlertBlock(`งานเจ้าของเต็นท์ ${oc.total} รายการ`, oc.total,
+    ownRows.map(x => row(`switchTab('owner')`, x[0], x[1] + ' รายการ')).join(''), true);
   h += r3AlertBlock(`รถในสต็อกที่ยังไม่ลงข้อมูล / ยังไม่จำนำ ${gaps.length} คัน`, gaps.length,
     gaps.map(g => `<div class="r3-alert-row" data-code="${escapeHtml(g.code)}" onclick="openCarDrawer(this.dataset.code)"><span><b>${escapeHtml(g.code)}</b> ${escapeHtml(r1Title(g.code) || (r1Car(g.code) || {}).model || '')}</span><span class="muted">${g.reasons.join(' · ')}</span></div>`).join(''), gaps.some(g => g.noDetail));
   h += r3AlertBlock(`ฝ่ายบัญชี: ยังไม่ได้รับเงินจากไฟแนนซ์ ${finWait.length} คัน · ${r2M(finWait.reduce((s, r) => s + r.amount, 0))} บาท`, finWait.length,
     finWait.map(r => row(`switchTab('finrec')`, `<b>${escapeHtml(r.code)}</b> ${escapeHtml(r1Title(r.code))} · ${escapeHtml(r.fin || '—')}`, `${r.amount ? r2M(r.amount) + ' บาท · ' : ''}รอ ${r.days == null ? '—' : r.days} วัน`)).join(''), finWait.some(r => (r.days || 0) > 30));
   h += r3AlertBlock(`ฝ่ายบัญชี: ค่าโอนเก็บตามจริงที่ยังไม่ได้รับยอด ${tr.length} คัน`, tr.length,
     tr.map(r => `<div class="r3-alert-row" data-code="${escapeHtml(r.code)}" onclick="r2LedgerOpen(this.dataset.code)"><span><b>${escapeHtml(r.code)}</b> ${escapeHtml(r1Title(r.code))}</span><span class="muted">ส่งมอบ ${r.delivered ? r1FmtDmy(r.delivered) : '—'} · ${r.actual != null ? 'ยอดจริง ' + r2M(r.actual) : 'ยังไม่กรอกยอดจริง'}</span></div>`).join(''));
-  h += r3AlertBlock(`รอเจ้าของคอนเฟิร์มขาย ${pend.length} เคส`, pend.length,
-    pend.map(c => `<div class="r3-alert-row" onclick="r2QuickConfirmSold('${escapeHtml(String(c.id))}')"><span><b>${escapeHtml(c.carCode)}</b> ${escapeHtml(r1Title(c.carCode))} · เคส ${escapeHtml(c.caseCode || '')}</span><span class="btn btn-primary btn-sm">คอนเฟิร์มขาย</span></div>`).join(''));
   const expired = tax.filter(t => t.dt != null && t.dt < 0).length;
   h += r3AlertBlock(`ฝ่ายทะเบียน: ภาษีใกล้หมด/หมดแล้ว ${tax.length} คัน${expired ? ' (หมดแล้ว ' + expired + ')' : ''}`, tax.length,
     tax.map(t => row(`switchTab('registry')`, `<b>${escapeHtml(t.code)}</b> ${escapeHtml(r1Title(t.code))}`, t.dt == null ? 'ยังไม่เคยลงข้อมูลภาษี' : (t.dt < 0 ? 'หมดแล้ว ' + (-t.dt) + ' วัน' : 'อีก ' + t.dt + ' วัน'))).join(''), expired > 0);
-  const depC = r4DepConfirmItems();
-  h += r3AlertBlock(`รอเจ้าของคอนเฟิร์มได้รับเงินมัดจำเล่มคืน ${depC.length} คัน`, depC.length,
-    depC.map(x => `<div class="r3-alert-row" onclick="r4ConfirmDeposit('${escapeHtml(x.code)}')"><span><b>${escapeHtml(x.code)}</b> ${escapeHtml(r1Title(x.code))} · ได้คืน ${r2M(x.d.deposit_returned_amount)} จาก ${r2M(x.d.deposit_amount)}${x.diff > 0 ? ' <span class="r2-neg">⚠ ขาด ' + r2M(x.diff) + '</span>' : ''}</span><span class="btn btn-primary btn-sm">คอนเฟิร์ม</span></div>`).join(''), depC.some(x => x.diff > 0));
   h += r3AlertBlock(`ฝ่ายทะเบียน: เงินมัดจำเล่มรอคืน ${dep.length} คัน · ${r2M(dep.reduce((s, x) => s + Number(x.d.deposit_amount || 0), 0))} บาท`, dep.length,
     dep.map(x => row(`switchTab('registry')`, `<b>${escapeHtml(x.code)}</b> ${escapeHtml(r1Title(x.code))}`, r2M(x.d.deposit_amount) + ' บาท' + (x.days != null ? ' · ' + x.days + ' วัน' : ''))).join(''));
   h += r3AlertBlock(`ฝ่ายทะเบียน: เอกสารส่งคุณหญิง ไม่ครบ ${docsMissing.length} คัน · ครบแล้วรอส่ง ${docsReady.length} คัน`, docsMissing.length + docsReady.length,
     docsMissing.concat(docsReady).map(x => row(`switchTab('registry')`, `<b>${escapeHtml(x.code)}</b> ${escapeHtml(r1Title(x.code))}`, x.complete ? 'ครบแล้ว รอส่ง' : 'ขาด ' + (x.missing || []).join(', '))).join(''));
-  h += r3AlertBlock(`ฝ่ายทะเบียน: ลงขายยังไม่ครบ ${lst.length} คัน`, lst.length,
-    lst.map(x => row(`switchTab('registry')`, `<b>${escapeHtml(x.code)}</b> ${escapeHtml(r1Title(x.code))}`, 'ขาด ' + x.missing.join(', '))).join(''));
   box.innerHTML = h || '<div class="r2-info" style="margin-bottom:14px;">ไม่มีเรื่องที่ต้องตามในตอนนี้</div>';
 }
 
@@ -6814,6 +7025,7 @@ async function reloadR3Dismiss() {
     r3Dismiss = {};
     (data || []).forEach(r => { r3Dismiss[r.code + '|' + r.kind] = r; });
     renderRegistry();
+    renderOwnerTasks();
     if (isAdmin()) { r3RenderOverview(); }
   } catch (e) { /* ยังไม่ได้รัน round3_setup.sql — ใช้งานส่วนอื่นต่อได้ */ }
 }
