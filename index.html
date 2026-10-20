@@ -859,7 +859,7 @@
         </section>
         <section class="r1-section">
           <h3>5) วิดีโอที่ต้องตรวจ/แก้ <span class="r1-count" id="ownVideoCount">0</span></h3>
-          <p class="r1-sub">รอตรวจ (ยังไม่ตรวจ/ต้องแก้) และที่ส่งกลับให้ตัดต่อแก้แล้ว — เลือกผลตรวจได้ที่นี่ ("ผ่าน" = เสร็จแล้ว, "ต้องแก้" = ส่งกลับให้ตัดต่อ)</p>
+          <p class="r1-sub">รอตรวจ (รวมที่ตัดต่อแก้เสร็จแล้วส่งกลับมาตรวจซ้ำ — มีป้ายเขียว) และที่ส่งกลับให้ตัดต่อแก้แล้ว — เลือกผลตรวจได้ที่นี่ ("ผ่าน" = เสร็จแล้ว, "ต้องแก้" = ส่งกลับให้ตัดต่อ)</p>
           <div id="ownVideoList"></div>
         </section>
         <section class="r1-section">
@@ -950,7 +950,7 @@
           <select class="filter-select" id="buysType" onchange="renderBuys()"><option value="all">ทุกประเภท</option><option value="cash">ซื้อสด</option><option value="fin">ปิดไฟแนนซ์</option><option value="consign">ฝากขาย</option></select>
           <select class="filter-select" id="buysChannel" onchange="renderBuys()"><option value="all">ทุกช่องทาง</option></select>
           <select class="filter-select" id="buysSort" onchange="renderBuys()" title="เรียงลำดับ">
-            <option value="code_asc">เรียง: รหัสรถ น้อย→มาก</option><option value="code_desc">เรียง: รหัสรถ มาก→น้อย</option>
+            <option value="code_desc" selected>เรียง: รหัสรถ มาก→น้อย</option><option value="code_asc">เรียง: รหัสรถ น้อย→มาก</option>
             <option value="date_desc">เรียง: วันที่ซื้อ ใหม่→เก่า</option><option value="date_asc">เรียง: วันที่ซื้อ เก่า→ใหม่</option>
             <option value="final_desc">เรียง: ราคาที่จบ มาก→น้อย</option><option value="final_asc">เรียง: ราคาที่จบ น้อย→มาก</option>
             <option value="sale_desc">เรียง: ราคาขาย มาก→น้อย</option><option value="sale_asc">เรียง: ราคาขาย น้อย→มาก</option>
@@ -3541,6 +3541,12 @@ function r1Title(code) {
   const c = r1Car(code);
   return pre + (c ? c.model : '');
 }
+/* สรุปข้อมูลรถ + เลขทะเบียน/จังหวัดต่อท้าย (ใช้ในสรุปรถซื้อเข้า / งานทะเบียน / งานเจ้าของเต็นท์) */
+function r1TitlePlate(code) {
+  const d = carDetails[code];
+  const plate = d ? [d.plate, d.plate_province].filter(Boolean).join(' ').trim() : '';
+  return r1Title(code) + (plate ? ' · ' + plate : '');
+}
 /* ---------- สต็อกรายเดือน: รถที่ยังไม่ขายอยู่เดือนปัจจุบันเสมอ รถที่ขายแล้วอยู่ในเดือนที่ขาย ---------- */
 let r1StockMonthKey = null;
 function r1CurStockMonth() { if (!r1StockMonthKey) r1StockMonthKey = currentMonthKey(); return r1StockMonthKey; }
@@ -3855,7 +3861,7 @@ function renderBuys() {
       if (!hay.includes(q)) return false;
     }
     return true;
-  }).sort(sorters[sortBy] || codeCmp);
+  }).sort(sorters[sortBy] || sorters.code_desc);
   r5LastRows = rows;
   const sum = rows.reduce((t, r) => t + (r.final || 0), 0);
   const nPrice = rows.filter(r => r.final != null).length;
@@ -3869,7 +3875,7 @@ function renderBuys() {
     return `<tr data-code="${escapeHtml(r.code)}" onclick="openCarDrawer(this.dataset.code)">
       <td class="muted">${r.date ? r1FmtDmy(r.date) : '—'}</td>
       <td><span class="code-badge">${escapeHtml(r.code)}</span></td>
-      <td><div class="cust-name">${escapeHtml(r1Title(r.code))}</div><div class="cust-sub">${escapeHtml(sub || '—')}</div></td>
+      <td><div class="cust-name">${escapeHtml(r1TitlePlate(r.code))}</div><div class="cust-sub">${escapeHtml(sub || '—')}</div></td>
       <td style="text-align:right;">${r.final != null ? '<b>' + fmtMoney(r.final) + '</b>' : '<span class="muted">' + (r.consign ? 'ฝากขาย' : '—') + '</span>'}</td>
       <td style="text-align:right;">${r.sale != null ? fmtMoney(r.sale) : '<span class="muted">—</span>'}</td>
       <td class="muted">${d.purchase_channel ? escapeHtml(d.purchase_channel) : '—'}</td>
@@ -3881,7 +3887,7 @@ async function r5CopyBuys() {
   const head = ['วันที่ซื้อ', 'รหัสรถ', 'รุ่นรถ', 'ปีผลิต/ปีจดทะเบียน', 'สี', 'เลขไมล์', 'ราคาที่จบ', 'ราคาขาย', 'ช่องทาง'];
   const clean = v => String(v == null ? '' : v).replace(/[\t\r\n]+/g, ' ');
   const lines = r5LastRows.map(r => [
-    r.date ? r1FmtDmy(r.date) : '', r.code, r1Title(r.code), r1YearTxt(r.d), r.d.color || '',
+    r.date ? r1FmtDmy(r.date) : '', r.code, r1TitlePlate(r.code), r1YearTxt(r.d), r.d.color || '',
     r.d.mileage != null && r.d.mileage !== '' ? r.d.mileage : '', r.final != null ? r.final : '', r.sale != null ? r.sale : '', r.d.purchase_channel || '',
   ].map(clean).join('\t'));
   const text = [head.join('\t')].concat(lines).join('\n');
@@ -4352,7 +4358,7 @@ async function r1Persist(code, form) {
 /* ---------- registry page ---------- */
 function renderRegistry() {
   if (!canEditStock() || !document.getElementById('r1TaxList')) return;
-  const tag = (code) => `<span class="code-badge">${escapeHtml(code)}</span> <span style="margin-left:8px; font-weight:600;">${escapeHtml(r1Title(code))}</span>`;
+  const tag = (code) => `<span class="code-badge">${escapeHtml(code)}</span> <span style="margin-left:8px; font-weight:600;">${escapeHtml(r1TitlePlate(code))}</span>`;
   const btn = (label, fn, code, cls) => `<button class="btn ${cls || 'btn-ghost'} btn-sm" data-code="${escapeHtml(code)}" onclick="event.stopPropagation(); ${fn}(this.dataset.code)">${label}</button>`;
 
   if (typeof r2RenderSoldPending === 'function') r2RenderSoldPending();
@@ -4457,7 +4463,7 @@ function renderRegistry() {
 }
 
 /* ---------- ส่วนที่ใช้ร่วมกัน: หน้างานทะเบียน (ฝ่ายทะเบียน) และหมวด "งานเจ้าของเต็นท์" ---------- */
-function r5Tag(code) { return `<span class="code-badge">${escapeHtml(code)}</span> <span style="margin-left:8px; font-weight:600;">${escapeHtml(r1Title(code))}</span>`; }
+function r5Tag(code) { return `<span class="code-badge">${escapeHtml(code)}</span> <span style="margin-left:8px; font-weight:600;">${escapeHtml(r1TitlePlate(code))}</span>`; }
 function r5Btn(label, fn, code, cls) { return `<button class="btn ${cls || 'btn-ghost'} btn-sm" data-code="${escapeHtml(code)}" onclick="event.stopPropagation(); ${fn}(this.dataset.code)">${label}</button>`; }
 /* ลงขายยังไม่ครบ (แก้ติ๊กได้เลย) */
 function r5ListingBlock() {
@@ -4549,11 +4555,18 @@ function renderOwnerTasks() {
   // 5) วิดีโอที่ต้องตรวจ/แก้
   setCount('ownVideoCount', t.video.length);
   const APPR = [APPROVAL_PENDING, APPROVAL_PASS, APPROVAL_REVISE];
-  document.getElementById('ownVideoList').innerHTML = t.video.length ? t.video.map(v => {
+  // ตัดต่อแก้เสร็จแล้วกดกลับเป็น "รอตรวจ" (ผลตรวจเดิมยังเป็น "ต้องแก้") = ส่งกลับมาตรวจซ้ำ → ขึ้นก่อนและมีป้ายระบุ
+  const vidRank = v => (v.status === VIDEO_STATUS_REVIEW && v.approvalStatus === APPROVAL_REVISE) ? 0 : (v.status === VIDEO_STATUS_REVIEW ? 1 : 2);
+  const vids = t.video.slice().sort((a, b) => vidRank(a) - vidRank(b));
+  document.getElementById('ownVideoList').innerHTML = vids.length ? vids.map(v => {
     const sentBack = v.status === VIDEO_STATUS_EDITING;   // ต้องแก้ และส่งกลับให้ตัดต่อแล้ว
-    return `<div class="r1-row">
-      <div class="main"><span class="code-badge">${escapeHtml(v.code)}</span> <span style="margin-left:8px; font-weight:600;">${escapeHtml(v.title || '')}</span>
-        <div class="muted" style="margin-top:2px;">${sentBack ? 'ส่งกลับให้ตัดต่อแก้แล้ว — รอแก้เสร็จ' : 'รอตรวจ · ผลตรวจ: ' + escapeHtml(v.approvalStatus)}${v.note ? ' · ' + escapeHtml(v.note) : ''}</div></div>
+    const resub = v.status === VIDEO_STATUS_REVIEW && v.approvalStatus === APPROVAL_REVISE;
+    const flag = resub
+      ? '<span class="badge" style="background:#157F3C18; color:#157F3C; margin-left:8px;"><span class="dot"></span>ตัดต่อแก้เสร็จแล้ว — ส่งกลับมารอตรวจซ้ำ</span>'
+      : (sentBack ? '<span class="badge" style="background:#C97F0018; color:#C97F00; margin-left:8px;"><span class="dot"></span>ส่งกลับให้ตัดต่อแก้แล้ว — รอแก้เสร็จ</span>' : '<span class="badge" style="background:#2563EB18; color:#2563EB; margin-left:8px;"><span class="dot"></span>รอตรวจ</span>');
+    return `<div class="r1-row"${resub ? ' style="border-left:3px solid #157F3C;"' : ''}>
+      <div class="main"><span class="code-badge">${escapeHtml(v.code)}</span> <span style="margin-left:8px; font-weight:600;">${escapeHtml(v.title || '')}</span>${flag}
+        <div class="muted" style="margin-top:2px;">ผลตรวจครั้งล่าสุด: ${escapeHtml(v.approvalStatus)}${v.note ? ' · ' + escapeHtml(v.note) : ''}</div></div>
       <div class="meta">
         ${v.link ? `<a href="${escapeHtml(v.link)}" target="_blank" rel="noopener" class="phone-link" onclick="event.stopPropagation()">เปิดลิงก์</a>` : '<span class="muted">ยังไม่มีลิงก์</span>'}
         <select onchange="setVideoApproval('${escapeHtml(String(v.id))}', this.value)">${APPR.map(x => `<option value="${x}" ${x === v.approvalStatus ? 'selected' : ''}>${x}</option>`).join('')}</select>
