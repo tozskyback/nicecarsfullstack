@@ -6199,11 +6199,22 @@ function r2PendingMonthOf(code) {
   if (dv && dv.delivery_date) return String(dv.delivery_date).slice(0, 7);
   return r1SoldMonthKey(code) || currentMonthKey();
 }
+/* ประมาณการเท่านั้น (ไม่ใช่ตัวเลขจริง): รถที่จัดไฟแนนซ์ ให้นับ "ยอดจัดไฟแนนซ์" ในใบส่งมอบเป็นรายรับไว้ก่อน แม้ยังไม่ได้รับเงิน
+   — ถ้าบัญชีต่อคันมี "เงินไฟแนนซ์" แล้ว (c.income รวมไว้แล้ว) ไม่บวกซ้ำ */
+function r2FinanceEstimate(code, c) {
+  const dv = c && c.refs ? c.refs.delivery : null;
+  if (!dv || dv.buy_type !== 'ไฟแนนซ์') return 0;
+  const amt = Number(dv.finance_amount) || 0;
+  if (!(amt > 0)) return 0;
+  const L = r2Ledger[code] || {};
+  if (L.finance_income != null && L.finance_income !== '') return 0;
+  return amt;
+}
 function r2MonthData(mk) {
   const settled = Object.values(r2Ledger).filter(x => !r1IsPayout(x.code) && x.settled && x.settled_date && String(x.settled_date).slice(0, 7) === mk)
     .sort((a, b) => String(a.settled_date).localeCompare(String(b.settled_date)));
   const pending = cars.filter(c => r1Status(c.code) === 'ขาย' && !c.payout && !(r2Ledger[c.code] && r2Ledger[c.code].settled) && r2PendingMonthOf(c.code) === mk)
-    .map(c => ({ code: c.code, c: r2CostOf(c.code) }));
+    .map(c => { const cc = r2CostOf(c.code); const finEst = r2FinanceEstimate(c.code, cc); return { code: c.code, c: cc, finEst, est: cc.hasPrice ? cc.profit + finEst : null }; });
   const profit = settled.reduce((a, x) => a + (Number(x.settled_profit) || 0), 0);
   const income = settled.reduce((a, x) => a + (Number(x.settled_income) || 0), 0);
   const cost = settled.reduce((a, x) => a + (Number(x.settled_cost) || 0), 0);
@@ -6231,7 +6242,7 @@ function r2RenderLedgerMonth(body) {
   D.pending.forEach(r => {
     h += `<tr data-code="${escapeHtml(r.code)}" onclick="r2LedgerOpen(this.dataset.code)"><td><span class="code-badge">${escapeHtml(r.code)}</span></td><td><div class="cust-name">${escapeHtml(r1Title(r.code))}</div></td>
       <td><span class="badge" style="background:#C97F0018; color:#C97F00;"><span class="dot"></span>รอปันผล</span></td>
-      <td class="muted">${r.c.income ? r2M(r.c.income) : '—'}</td><td class="muted">${r.c.hasPrice ? r2M(r.c.cost) : '—'}</td><td class="muted">${r.c.hasPrice ? '(ยังไม่นับ) ' + r2M(r.c.profit) : '—'}</td><td class="muted">—</td></tr>`;
+      <td class="muted">${r.c.income ? r2M(r.c.income) : '—'}</td><td class="muted">${r.c.hasPrice ? r2M(r.c.cost) : '—'}</td><td class="muted">${r.est != null ? '(ประมาณการ ยังไม่นับ) ' + r2M(r.est) + (r.finEst > 0 ? '<div style="font-size:12px;">รวมยอดจัดไฟแนนซ์ ' + r2M(r.finEst) + ' ที่ยังไม่ได้รับ</div>' : '') : '—'}</td><td class="muted">—</td></tr>`;
   });
   body.innerHTML = h + '</tbody></table>';
 }
@@ -6692,12 +6703,13 @@ function r3FixedFor(mk) {
 // รายรับ = กำไรรถ (ปันผลแล้ว) + รายรับอื่น ๆ · สุทธิ = รายรับ − Fix Cost − ค่าใช้จ่ายระหว่างเดือน
 function r3AcCalc(mk, fixed, extra, includePending, income) {
   const D = r2MonthData(mk);
-  const pendingEst = D.pending.reduce((s, r) => s + (r.c.hasPrice ? r.c.profit : 0), 0);
+  const pendingEst = D.pending.reduce((s, r) => s + (r.est != null ? r.est : 0), 0);   // ประมาณการ: รวมยอดจัดไฟแนนซ์ที่ยังไม่ได้รับ
+  const pendingFinEst = D.pending.reduce((s, r) => s + (r.est != null ? r.finEst : 0), 0);
   const carProfit = D.profit + (includePending ? pendingEst : 0);
   const otherIncome = r2ListSum(income);
   const fixedTotal = r2ListSum(fixed), extraTotal = r2ListSum(extra);
   const revenue = carProfit + otherIncome;
-  return { D, carProfit, pendingEst, otherIncome, revenue, fixedTotal, extraTotal, expense: fixedTotal + extraTotal, net: revenue - fixedTotal - extraTotal };
+  return { D, carProfit, pendingEst, pendingFinEst, estimated: !!(includePending && D.pending.length), otherIncome, revenue, fixedTotal, extraTotal, expense: fixedTotal + extraTotal, net: revenue - fixedTotal - extraTotal };
 }
 function r3RowCalc(mk) {
   const row = r3Monthly[mk];
@@ -6758,15 +6770,16 @@ function r3AcPreview() {
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
   set('r3AcExtraTotal', r2M(c.extraTotal)); set('r3AcIncomeTotal', r2M(c.otherIncome)); set('r3AcCarProfit', (c.carProfit >= 0 ? '' : '−') + r2M(Math.abs(c.carProfit)));
   const cl = document.getElementById('r3AcCarList'); if (cl) cl.innerHTML = r3CarProfitHtml(mk);
-  set('r3AcCarProfitSub', `ปันผลแล้ว ${c.D.settled.length} คัน${c.D.pending.length ? ` · รอปันผล ${c.D.pending.length} คัน (ประมาณ ${r2M(c.pendingEst)}${r3AcIncludePending ? ' — รวมแล้ว' : ' — ยังไม่รวม'})` : ''}`);
+  set('r3AcCarProfitSub', `ปันผลแล้ว ${c.D.settled.length} คัน${c.D.pending.length ? ` · รอปันผล ${c.D.pending.length} คัน (ประมาณการ ${r2M(c.pendingEst)}${c.pendingFinEst > 0 ? ' · รวมยอดจัดไฟแนนซ์ที่ยังไม่ได้รับ ' + r2M(c.pendingFinEst) : ''}${r3AcIncludePending ? ' — รวมแล้ว' : ' — ยังไม่รวม'})` : ''}`);
   sum.innerHTML = `<div class="r3-cards">
-    <div class="r3-card ${c.revenue >= 0 ? 'pos' : 'neg'}"><div class="v">${c.revenue >= 0 ? '' : '−'}${r2M(Math.abs(c.revenue))}</div><div class="l">รายรับรวม</div><div class="s">กำไรรถ ${r2M(c.carProfit)} + รายรับอื่น ${r2M(c.otherIncome)}</div></div>
+    <div class="r3-card ${c.revenue >= 0 ? 'pos' : 'neg'}"><div class="v">${c.revenue >= 0 ? '' : '−'}${r2M(Math.abs(c.revenue))}</div><div class="l">รายรับรวม</div><div class="s">กำไรรถ ${r2M(c.carProfit)}${c.estimated ? ' (รวมประมาณการ ' + r2M(c.pendingEst) + ')' : ''} + รายรับอื่น ${r2M(c.otherIncome)}</div></div>
     <div class="r3-card"><div class="v">${r2M(c.fixedTotal)}</div><div class="l">Fix Cost</div></div>
     <div class="r3-card"><div class="v">${r2M(c.extraTotal)}</div><div class="l">ค่าใช้จ่ายระหว่างเดือน</div></div></div>
-    <div class="r3-card ${c.net >= 0 ? 'pos' : 'neg'}" style="margin-bottom:10px;"><div class="l">กำไร / ขาดทุนสุทธิ ${escapeHtml(monthKeyLabel(mk))}</div>
+    <div class="r3-card ${c.net >= 0 ? 'pos' : 'neg'}" style="margin-bottom:10px;"><div class="l">กำไร / ขาดทุนสุทธิ ${escapeHtml(monthKeyLabel(mk))}${c.estimated ? ' — ประมาณการคร่าว ๆ (ยังไม่ใช่ตัวเลขจริง)' : ''}</div>
       <div class="r3-big ${c.net >= 0 ? 'r2-pos' : 'r2-neg'}">${c.net >= 0 ? '+' : '−'}${r2M(Math.abs(c.net))} บาท</div>
       <div class="s">${c.net >= 0 ? 'กำไร' : 'ขาดทุน'} = รายรับรวม ${r3Pos(c.revenue)} − Fix Cost ${r2M(c.fixedTotal)} − ค่าใช้จ่ายระหว่างเดือน ${r2M(c.extraTotal)}</div></div>
-    <label style="display:flex; gap:8px; align-items:center; font-size:13px; margin-bottom:14px;"><input type="checkbox" ${r3AcIncludePending ? 'checked' : ''} onchange="r3AcIncludePending = this.checked; r3AcPreview(); r3RenderHistory(); r3RenderPeriod();"> รวมประมาณการกำไรของรถที่ยังไม่กด "ปันผลแล้ว" (ปกตินับเฉพาะคันที่ปันผลแล้ว)</label>`;
+    <label style="display:flex; gap:8px; align-items:center; font-size:13px; margin-bottom:14px;"><input type="checkbox" ${r3AcIncludePending ? 'checked' : ''} onchange="r3AcIncludePending = this.checked; r3AcPreview(); r3RenderHistory(); r3RenderPeriod();"> รวมประมาณการกำไรคร่าว ๆ ของรถที่ยังไม่กด "ปันผลแล้ว" (ยังไม่ใช่ตัวเลขจริง · ปกตินับเฉพาะคันที่ปันผลแล้ว)</label>
+    ${r3AcIncludePending ? '<div class="r2-info" style="margin:-6px 0 14px;">ตอนนี้แสดงเป็น <b>ประมาณการ</b> — รถที่ยังไม่ปันผลนับกำไรตามบัญชีต่อคันที่กรอกไว้ ณ ตอนนี้ และรถที่จัดไฟแนนซ์จะนับ "ยอดจัดไฟแนนซ์" เป็นรายรับไว้ก่อนแม้ยังไม่ได้รับเงินจากไฟแนนซ์ (ถ้าบัญชีต่อคันมีเงินไฟแนนซ์แล้วจะไม่นับซ้ำ) · ไม่มีผลกับตัวเลขที่บันทึกไว้จริง</div>' : ''}`;
 }
 // รายคันที่ขายในเดือน: รหัสรถ + รุ่นคร่าว ๆ + ยอดขาย + กำไร (คันที่ปันผลแล้วเรียงตามวันที่ปันผล · คันรอปันผลต่อท้าย)
 function r3CarModel(code) {
@@ -6778,19 +6791,19 @@ function r3CarProfitHtml(mk) {
   const D = r2MonthData(mk);
   const soldPrice = code => { const dv = r2DeliveryByCar(code); return dv && dv.sold_price != null ? Number(dv.sold_price) : null; };
   const rows = D.settled.map(x => ({ code: x.code, price: soldPrice(x.code), profit: Number(x.settled_profit) || 0, date: x.settled_date, pending: false }))
-    .concat(D.pending.map(r => ({ code: r.code, price: soldPrice(r.code), profit: r.c.hasPrice ? r.c.profit : null, date: null, pending: true })));
+    .concat(D.pending.map(r => ({ code: r.code, price: soldPrice(r.code), profit: r.est, finEst: r.finEst, date: null, pending: true })));
   if (!rows.length) return '<div class="muted">เดือนนี้ยังไม่มีรถที่ขาย</div>';
   const sp = x => x == null ? '<span class="muted">—</span>' : r3Pos(x);
   return `<div class="table-wrap"><table><thead><tr><th>#</th><th>รหัสรถ</th><th>รุ่นรถ</th><th>ยอดขาย</th><th>กำไร</th><th>สถานะ</th></tr></thead><tbody>` +
     rows.map((r, i) => `<tr data-code="${escapeHtml(r.code)}" onclick="r2LedgerOpen(this.dataset.code)" class="${r.pending && !r3AcIncludePending ? 'muted' : ''}"><td>${i + 1}</td><td><span class="code-badge">${escapeHtml(r.code)}</span></td><td>${escapeHtml(r3CarModel(r.code))}</td><td>${r.price == null ? '<span class="muted">—</span>' : r2M(r.price)}</td><td>${sp(r.profit)}</td>` +
-      `<td>${r.pending ? '<span class="r2-flag">รอปันผล' + (r3AcIncludePending ? ' (รวมแล้ว)' : ' (ยังไม่รวม)') + '</span>' : 'ปันผลแล้ว ' + escapeHtml(r1FmtDmy(r.date))}</td></tr>`).join('') +
-    `<tr class="total"><td></td><td colspan="2"><b>รวมกำไรที่นับ</b></td><td>${r2M(rows.reduce((a, r) => a + (r.price || 0), 0))}</td><td>${r3Pos(rows.filter(r => !r.pending || r3AcIncludePending).reduce((a, r) => a + (r.profit || 0), 0))}</td><td></td></tr></tbody></table></div>`;
+      `<td>${r.pending ? '<span class="r2-flag">รอปันผล' + (r3AcIncludePending ? ' (รวมประมาณการ)' : ' (ยังไม่รวม)') + '</span>' + (r.finEst > 0 ? '<div class="muted" style="font-size:12px;">รวมยอดจัดไฟแนนซ์ ' + r2M(r.finEst) + ' ที่ยังไม่ได้รับ</div>' : '') : 'ปันผลแล้ว ' + escapeHtml(r1FmtDmy(r.date))}</td></tr>`).join('') +
+    `<tr class="total"><td></td><td colspan="2"><b>รวมกำไรที่นับ${r3AcIncludePending && rows.some(r => r.pending) ? ' (รวมประมาณการ)' : ''}</b></td><td>${r2M(rows.reduce((a, r) => a + (r.price || 0), 0))}</td><td>${r3Pos(rows.filter(r => !r.pending || r3AcIncludePending).reduce((a, r) => a + (r.profit || 0), 0))}</td><td></td></tr></tbody></table></div>`;
 }
 function r3RenderHistory() {
   const box = document.getElementById('r3AcHistory');
   if (!box) return;
   const cur = r3AcCur();
-  let h = '<div class="r1-form-section"><h4>ย้อนหลัง 6 เดือน</h4><div class="table-wrap"><table><thead><tr><th>เดือน</th><th>รายรับรวม</th><th>Fix Cost</th><th>ระหว่างเดือน</th><th>สุทธิ</th></tr></thead><tbody>';
+  let h = '<div class="r1-form-section"><h4>ย้อนหลัง 6 เดือน' + (r3AcIncludePending ? ' <span class="r2-flag">รวมประมาณการ</span>' : '') + '</h4><div class="table-wrap"><table><thead><tr><th>เดือน</th><th>รายรับรวม</th><th>Fix Cost</th><th>ระหว่างเดือน</th><th>สุทธิ</th></tr></thead><tbody>';
   for (let i = 0; i < 6; i++) {
     const mk = shiftMonthKey(cur, -i), row = r3Monthly[mk], c = r3RowCalc(mk);
     h += `<tr onclick="r3AcMonth='${mk}'; r3AcDirty=false; r3RenderMonthly(true);"><td>${escapeHtml(monthKeyLabel(mk))}</td><td>${r3Pos(c.revenue)}</td>` +
@@ -6831,7 +6844,7 @@ function r3RenderPeriod() {
   const P = r3PerCalc(), months = P.rows.map(r => r.mk);
   const label = (r3PerMode === 'year' ? 'ปี ' + r3PerYear : 'ไตรมาส ' + r3PerQ + '/' + r3PerYear) + ' (' + monthKeyLabel(months[0]) + ' – ' + monthKeyLabel(months[months.length - 1]) + ')';
   const t = P.t;
-  box.innerHTML = `<div class="r1-form-section"><h4>สรุปรายไตรมาส / รายปี</h4>
+  box.innerHTML = `<div class="r1-form-section"><h4>สรุปรายไตรมาส / รายปี${r3AcIncludePending ? ' <span class="r2-flag">รวมประมาณการ (ยังไม่ใช่ตัวเลขจริง)</span>' : ''}</h4>
     <div class="month-bar">
       <select class="filter-select" id="r3PerMode" onchange="r3PerSetMode(this.value)"><option value="quarter"${r3PerMode === 'quarter' ? ' selected' : ''}>รายไตรมาส</option><option value="year"${r3PerMode === 'year' ? ' selected' : ''}>รายปี</option></select>
       <button class="icon-btn" title="ก่อนหน้า" onclick="r3PerShift(-1)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
