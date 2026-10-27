@@ -639,6 +639,20 @@
           </div>
           <button class="btn btn-primary" onclick="addBrokerFromTab()">+ เพิ่มนายหน้า</button>
         </div>
+        <div class="filterbar" style="margin-bottom:10px;">
+          <div class="search-box">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M21 21l-4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            <input type="text" id="brokerSearch" placeholder="ค้นหารหัส, ชื่อเล่น, ชื่อจริง, เบอร์โทร…" oninput="renderBrokerList()">
+          </div>
+          <select class="filter-select" id="brokerSort" onchange="renderBrokerList()" title="เรียงลำดับ">
+            <option value="code_asc">เรียง: รหัส น้อย→มาก</option>
+            <option value="code_desc">เรียง: รหัส มาก→น้อย</option>
+            <option value="nick_asc">เรียง: ชื่อเล่น ก→ฮ</option>
+            <option value="nick_desc">เรียง: ชื่อเล่น ฮ→ก</option>
+            <option value="sold_desc">เรียง: ขายได้ มาก→น้อย</option>
+            <option value="sold_asc">เรียง: ขายได้ น้อย→มาก</option>
+          </select>
+        </div>
         <div class="car-filter-bar" id="brokerFilterBar"></div>
         <div class="car-list" id="brokerList"></div>
       </div>
@@ -2599,14 +2613,30 @@ function renderBrokerList() {
     return;
   }
 
+  const q = ((document.getElementById('brokerSearch') || {}).value || '').trim().toLowerCase();
+  const qDigits = q.replace(/\D/g, '');
+  const sortBy = (document.getElementById('brokerSort') || {}).value || 'code_asc';
+  const codeCmp = (a, b) => String(a.code || '').localeCompare(String(b.code || ''), undefined, { numeric: true, sensitivity: 'base' });
+  const nickCmp = (a, b) => String(a.nickname || '').localeCompare(String(b.nickname || ''), 'th') || codeCmp(a, b);
+  const sorters = {
+    code_asc: codeCmp, code_desc: (a, b) => codeCmp(b, a),
+    nick_asc: nickCmp, nick_desc: (a, b) => nickCmp(b, a) || 0,
+    sold_desc: (a, b) => brokerSoldCount(b.code) - brokerSoldCount(a.code) || codeCmp(a, b),
+    sold_asc: (a, b) => brokerSoldCount(a.code) - brokerSoldCount(b.code) || codeCmp(a, b),
+  };
   const filtered = brokers.filter(b => {
     const sold = brokerSoldCount(b.code);
-    if (brokerFilter === 'closed') return sold > 0;
-    if (brokerFilter === 'pending') return sold === 0;
+    if (brokerFilter === 'closed' && !(sold > 0)) return false;
+    if (brokerFilter === 'pending' && sold !== 0) return false;
+    if (q) {
+      const hay = [b.code, b.nickname, b.fullName, b.phone].filter(Boolean).join(' ').toLowerCase();
+      const phoneDigits = String(b.phone || '').replace(/\D/g, '');
+      if (!hay.includes(q) && !(qDigits.length >= 3 && phoneDigits.includes(qDigits))) return false;
+    }
     return true;
-  });
+  }).sort(sorters[sortBy] || codeCmp);
   if (filtered.length === 0) {
-    wrap.innerHTML = '<div class="muted" style="padding:12px 2px;">ไม่มีนายหน้าในหมวดนี้</div>';
+    wrap.innerHTML = '<div class="muted" style="padding:12px 2px;">' + (q ? 'ไม่พบนายหน้าที่ตรงกับ "' + escapeHtml(q) + '"' : 'ไม่มีนายหน้าในหมวดนี้') + '</div>';
     return;
   }
 
