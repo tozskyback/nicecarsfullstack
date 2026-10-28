@@ -6014,7 +6014,7 @@ function r2LedgerRender(code) {
   const sl0 = r2Ledger[code] && r2Ledger[code].settled ? r2Ledger[code] : null;
   const stBtn = document.getElementById('r2SettleBtn');
   if (stBtn) stBtn.textContent = sl0 ? 'ยกเลิกปันผลแล้ว' : 'ปันผลแล้ว';
-  let h = (sl0 ? `<div class="r2-info" style="border-left-color:#157F3C;"><b>ปันผลแล้ว</b> เมื่อ ${r1FmtDmy(sl0.settled_date)} · กำไร/ขาดทุนที่นับในเดือนนั้น ${(Number(sl0.settled_profit) >= 0 ? '+' : '−') + r2M(Math.abs(Number(sl0.settled_profit) || 0))} บาท (ยอดที่นับคือกำไร/ขาดทุน ไม่ใช่ยอดปันผล) · ตัวเลขที่นับถูกบันทึกไว้ตอนกดปุ่ม แก้บัญชีภายหลังไม่เปลี่ยนยอดเดิม</div>` + (r2EditedAfterSettle(sl0) ? `<div class="r2-warn">⚠ มีการแก้บัญชีคันนี้หลังกดปันผลแล้ว ยอดที่นับในเดือนยังเป็นยอดเดิม — ตรวจให้ถูกต้อง แล้วกด "ยกเลิกปันผลแล้ว" และ "ปันผลแล้ว" ใหม่ถ้าต้องการตัดยอดใหม่</div>` : '') : '') + `<div class="r2-info">
+  let h = (sl0 && sl0.settled_change_pending ? `<div class="r2-warn">⚠ ส่วนต่างรอยืนยันที่บัญชีรายเดือน — กำไรเดิม ${(Number(sl0.settled_prev_profit) >= 0 ? '+' : '−') + r2M(Math.abs(Number(sl0.settled_prev_profit) || 0))} → ปัจจุบัน ${(Number(sl0.settled_profit) >= 0 ? '+' : '−') + r2M(Math.abs(Number(sl0.settled_profit) || 0))}</div>` : '') + (sl0 ? `<div class="r2-info" style="border-left-color:#157F3C;"><b>ปันผลแล้ว</b> เมื่อ ${r1FmtDmy(sl0.settled_date)} · กำไร/ขาดทุนที่นับในเดือนนั้น ${(Number(sl0.settled_profit) >= 0 ? '+' : '−') + r2M(Math.abs(Number(sl0.settled_profit) || 0))} บาท (ยอดที่นับคือกำไร/ขาดทุน ไม่ใช่ยอดปันผล) · ถ้าแก้ตัวเลขภายหลัง ระบบจะถามยืนยัน แล้วเปลี่ยนยอดทันทีและแจ้งส่วนต่างที่บัญชีรายเดือน</div>` + (r2EditedAfterSettle(sl0) ? `<div class="r2-warn">⚠ มีการแก้บัญชีคันนี้หลังกดปันผลแล้ว ยอดที่นับในเดือนยังเป็นยอดเดิม — ตรวจให้ถูกต้อง แล้วกด "ยกเลิกปันผลแล้ว" และ "ปันผลแล้ว" ใหม่ถ้าต้องการตัดยอดใหม่</div>` : '') : '') + `<div class="r2-info">
     ราคาที่จบ: <b>${c0.hasPrice ? r2M(c0.price) : '— (ยังไม่กรอก)'}</b> บาท · ราคาถึงลูกค้า: <b>${pv.purchase_price != null ? r2M(pv.purchase_price) : '—'}</b> · ค่าคอมซื้อ: <b>${pv.purchase_commission != null ? r2M(pv.purchase_commission) : '—'}</b><br>
     วันที่รับรถเข้า: <b>${d.received_date ? r1FmtDmy(d.received_date) : '—'}</b> · วันที่จำนำ: <b>${c0.pledgeDate ? r1FmtDmy(c0.pledgeDate) : '—'}</b>
     ${isAdmin() && !c0.hasPrice ? '<br><span class="r2-neg">ยังไม่มีราคาซื้อ — กรอกได้ที่ฟอร์มรถเข้าในหน้าสต็อกรถ</span>' : ''}
@@ -6207,6 +6207,7 @@ async function r2SaveSettle(code, on) {
       row = Object.assign({ code }, L, { settled: true, settled_at: now, settled_date: L.settled_date || r1TodayStr(), settled_profit: Math.round(c.profit * 100) / 100, settled_income: Math.round(c.income * 100) / 100, settled_cost: Math.round(c.cost * 100) / 100, settled_net: Math.round(d.net * 100) / 100, updated_at: now });
     } else {
       row = { code, settled: false, settled_at: null, settled_date: null, settled_profit: null, settled_income: null, settled_cost: null, settled_net: null, updated_at: now };
+      if (r2Ledger[code] && r2Ledger[code].settled_change_pending) Object.assign(row, { settled_change_pending: false, settled_prev_profit: null, settled_change_at: null, settled_change_by: null });
     }
     const { error } = await sb.from('car_ledger').upsert(row, { onConflict: 'code' });
     if (error) throw error;
@@ -6350,24 +6351,55 @@ function r2LedgerPreview() {
     r2AcctSummaryHtml(c);
 }
 
+/* แก้บัญชีรถที่ปันผลแล้ว: ถ้าตัวเลข (กำไร/รายรับ/ต้นทุน/สุทธิ/เดือนที่นับ) เปลี่ยน → ถามยืนยัน แล้วตัวเลขเปลี่ยนทันที + ติดธงส่วนต่างไปที่บัญชีรายเดือน */
+function r2LedgerChangeInfo(code, merged) {
+  const old = r2Ledger[code];
+  if (!old || !old.settled || r1IsPayout(code)) return null;
+  const c = r2CostOf(code, merged), d = r2DivCompute(code, merged);
+  const rd = v => Math.round((Number(v) || 0) * 100) / 100;
+  const n = { profit: rd(c.profit), income: rd(c.income), cost: rd(c.cost), net: rd(d.net) };
+  const date = merged.settled_date || old.settled_date;
+  const changed = Math.abs(n.profit - rd(old.settled_profit)) >= 0.005 || Math.abs(n.income - rd(old.settled_income)) >= 0.005 ||
+    Math.abs(n.cost - rd(old.settled_cost)) >= 0.005 || Math.abs(n.net - rd(old.settled_net)) >= 0.005 || String(date).slice(0, 7) !== String(old.settled_date).slice(0, 7);
+  return { old, n, date, changed, oldProfit: rd(old.settled_profit), oldMk: String(old.settled_date).slice(0, 7), newMk: String(date).slice(0, 7) };
+}
+function r2LedgerCommit(code, patch, onSaved) {
+  const old = r2Ledger[code] || {};
+  const merged = Object.assign({}, old, patch);
+  const info = r2LedgerChangeInfo(code, merged);
+  const write = async (extra, label) => {
+    try {
+      const { error } = await sb.from('car_ledger').upsert(Object.assign({ code }, patch, extra, { updated_at: Date.now() }), { onConflict: 'code' });
+      if (error) throw error;
+      showToast(label);
+      if (onSaved) onSaved();
+      reloadR2Ledger();
+    } catch (e) { showToast('บันทึกไม่สำเร็จ' + (extra && extra.settled_change_pending !== undefined ? ' (ต้องรัน round6_setup.sql ก่อน)' : '') + ': ' + e.message, true); }
+  };
+  if (!info || !info.changed) { return write({}, 'บันทึกบัญชีรถ ' + code + ' แล้ว'); }
+  const sg = x => (x >= 0 ? '+' : '−') + r2M(Math.abs(x));
+  const diff = info.n.profit - info.oldProfit;
+  const ackProfit = old.settled_change_pending && old.settled_prev_profit != null ? Number(old.settled_prev_profit) : info.oldProfit;
+  const lockedMk = [info.oldMk, info.newMk].filter((m, i, a) => a.indexOf(m) === i && r3IsSubmitted(m));
+  const msg = 'รถ ' + code + ' ปันผลแล้ว (นับเดือน ' + monthKeyLabel(info.oldMk) + ') · กำไร/ขาดทุนที่นับไว้ ' + sg(info.oldProfit) + ' → จะเป็น ' + sg(info.n.profit) + ' (ส่วนต่าง ' + sg(diff) + ' บาท)'
+    + (info.newMk !== info.oldMk ? ' · ย้ายไปนับเดือน ' + monthKeyLabel(info.newMk) : '')
+    + ' · ถ้ายืนยัน ตัวเลขจะเปลี่ยนทันที และจะมีแจ้งเตือนส่วนต่างที่ยอดรวมบัญชีรายเดือนให้ยืนยันอีกครั้ง'
+    + (lockedMk.length ? ' · เดือน ' + lockedMk.map(monthKeyLabel).join(', ') + ' ส่งยอดแล้ว — ยอดที่ส่งไว้จะยังไม่เปลี่ยนจนกว่าจะยืนยันส่วนต่าง' : '');
+  r1Confirm('ตัวเลขรถที่ปันผลแล้วจะเปลี่ยน', msg, 'ยืนยันเปลี่ยนตัวเลข', () => {
+    const now = Date.now();
+    const back = Math.abs(info.n.profit - ackProfit) < 0.005 && info.newMk === info.oldMk;
+    write({
+      settled_at: now, settled_date: info.date, settled_profit: info.n.profit, settled_income: info.n.income, settled_cost: info.n.cost, settled_net: info.n.net,
+      settled_change_pending: !back, settled_prev_profit: back ? null : ackProfit, settled_change_at: back ? null : now, settled_change_by: back ? null : (session && session.username) || null,
+    }, 'เปลี่ยนตัวเลขรถ ' + code + ' แล้ว — มีส่วนต่างรอยืนยันที่บัญชีรายเดือน');
+  });
+}
 async function r2LedgerSave() {
   if (!isAdmin() || !r2LedgerCode) return;
   const code = r2LedgerCode;
   const { L, err } = r2LedgerCollect(true);
   if (err) { showToast(err, true); return; }
-  const btn = document.getElementById('r2LedgerSaveBtn');
-  btn.disabled = true;
-  try {
-    const { error } = await sb.from('car_ledger').upsert(Object.assign({ code }, L, { updated_at: Date.now() }), { onConflict: 'code' });
-    if (error) throw error;
-    showToast('บันทึกบัญชีรถ ' + code + ' แล้ว');
-    r2LedgerClose();
-    reloadR2Ledger();
-  } catch (e) {
-    showToast('บันทึกไม่สำเร็จ: ' + e.message, true);
-  } finally {
-    btn.disabled = false;
-  }
+  r2LedgerCommit(code, L, () => r2LedgerClose());
 }
 
 
@@ -6707,10 +6739,11 @@ async function r3FinSave(withAmounts) {
     if (a == null && c == null) { showToast('กรอกยอดที่ได้รับหรือค่าคอมก่อน', true); return; }
     rec.finance_income = a; rec.finance_commission = c;
   }
+  if (withAmounts) { const { updated_at, ...patch } = rec; r2LedgerCommit(code, patch, () => r3FinClose()); return; }
   try {
     const { error } = await sb.from('car_ledger').upsert(rec, { onConflict: 'code' });
     if (error) throw error;
-    showToast(withAmounts ? 'ใส่ยอดเข้าบัญชีรถ ' + code + ' แล้ว' : 'บันทึกสถานะแล้ว');
+    showToast('บันทึกสถานะแล้ว');
     r3FinClose();
     reloadR2Ledger();
   } catch (e) { showToast('บันทึกไม่สำเร็จ: ' + e.message, true); }
@@ -6731,15 +6764,35 @@ function r3FixedFor(mk) {
   return { rows: R3_FIXED_DEFAULT.map(l => ({ label: l, amount: null })), carried: false };
 }
 // รายรับ = กำไรรถ (ปันผลแล้ว) + รายรับอื่น ๆ · สุทธิ = รายรับ − Fix Cost − ค่าใช้จ่ายระหว่างเดือน
+/* เดือนที่ส่งยอดแล้ว = ใช้ยอดกำไรรถที่ล็อกไว้ใน submitted_snapshot (ไม่เปลี่ยนตามการแก้บัญชีรถภายหลัง จนกว่าจะยืนยันส่วนต่าง) */
+function r3SnapshotOf(mk) {
+  const row = r3Monthly[mk];
+  return row && row.submitted && row.submitted_snapshot && typeof row.submitted_snapshot === 'object' ? row.submitted_snapshot : null;
+}
+function r3IsSubmitted(mk) { const row = r3Monthly[mk]; return !!(row && row.submitted); }
+function r3BuildSnapshot(mk, fixed, extra, income, prevAdjust) {
+  const D = r2MonthData(mk);
+  const otherIncome = r2ListSum(income), fixedTotal = r2ListSum(fixed), extraTotal = r2ListSum(extra);
+  const revenue = D.profit + otherIncome;
+  return {
+    carProfit: Math.round(D.profit * 100) / 100,
+    cars: D.settled.map(x => ({ code: x.code, profit: Number(x.settled_profit) || 0, date: x.settled_date })),
+    count: D.settled.length, otherIncome, fixedTotal, extraTotal, revenue, net: revenue - fixedTotal - extraTotal,
+    adjustments: prevAdjust || [],
+  };
+}
 function r3AcCalc(mk, fixed, extra, includePending, income) {
   const D = r2MonthData(mk);
+  const snap = r3SnapshotOf(mk);
+  const settledProfit = snap ? (Number(snap.carProfit) || 0) : D.profit;
+  const settledCount = snap ? (Number(snap.count) || (snap.cars || []).length) : D.settled.length;
   const pendingEst = D.pending.reduce((s, r) => s + (r.est != null ? r.est : 0), 0);   // ประมาณการ = ยอดขาย − ต้นทุน ณ ปัจจุบัน
   const pendingNoEst = D.pending.filter(r => r.est == null).length;                    // ยังไม่มียอดขาย/ราคาซื้อ → ไม่นับ
-  const carProfit = D.profit + (includePending ? pendingEst : 0);
+  const carProfit = settledProfit + (includePending ? pendingEst : 0);
   const otherIncome = r2ListSum(income);
   const fixedTotal = r2ListSum(fixed), extraTotal = r2ListSum(extra);
   const revenue = carProfit + otherIncome;
-  return { D, carProfit, pendingEst, pendingNoEst, estimated: !!(includePending && D.pending.length), otherIncome, revenue, fixedTotal, extraTotal, expense: fixedTotal + extraTotal, net: revenue - fixedTotal - extraTotal };
+  return { D, locked: !!snap, settledCount, carProfit, pendingEst, pendingNoEst, estimated: !!(includePending && D.pending.length), otherIncome, revenue, fixedTotal, extraTotal, expense: fixedTotal + extraTotal, net: revenue - fixedTotal - extraTotal };
 }
 function r3RowCalc(mk) {
   const row = r3Monthly[mk];
@@ -6752,10 +6805,11 @@ function r3RenderMonthly(force) {
   r3MonthBar('r3Ac', mk);
   if (!(r3AcDirty && !force)) {                       // กำลังพิมพ์อยู่ ไม่รีเฟรชทับ
     const fx = r3FixedFor(mk), row = r3Monthly[mk] || {};
+    const locked = !!row.submitted;
     const extra = Array.isArray(row.extra) ? row.extra : [];
     const income = Array.isArray(row.income) ? row.income : [];
     const cb = 'r3AcDirty = true; r3AcPreview()';
-    form.innerHTML = `
+    form.innerHTML = r3LockBannerHtml(mk, row) + `<fieldset ${locked ? 'disabled' : ''} style="border:0; padding:0; margin:0; min-width:0;">
       <div class="r1-form-section" style="border-top:none; padding-top:0;" oninput="${cb}">
         <h4>รายรับ</h4>
         <div class="r2-sum-row"><span>กำไรจากการขายรถ (สรุปอัตโนมัติจากบัญชีต่อคัน)</span><span class="num" id="r3AcCarProfit">—</span></div>
@@ -6780,7 +6834,7 @@ function r3RenderMonthly(force) {
         <div class="r2-sum-row total" style="margin-top:8px;"><span>รวมค่าใช้จ่ายระหว่างเดือน</span><span class="num" id="r3AcExtraTotal">0</span></div>
       </div>
       <div class="r1-form-section"><div class="field"><label>หมายเหตุ</label><textarea id="r3AcNote" oninput="r3AcDirty = true">${escapeHtml(row.note || '')}</textarea></div>
-        <button class="btn btn-primary" onclick="r3AcSave()">บันทึกบัญชีเดือนนี้</button></div>`;
+        ${locked ? '<div class="muted">เดือนนี้ส่งยอดแล้ว — กด "ยกเลิกการส่งยอด" ด้านบนก่อนถึงจะแก้ไขได้</div>' : '<div style="display:flex; gap:8px; flex-wrap:wrap;"><button class="btn btn-primary" onclick="r3AcSave()">บันทึกบัญชีเดือนนี้</button><button class="btn btn-amber" onclick="r3AcSubmit()">ส่งยอดรายเดือน</button></div>'}</div></fieldset>`;
   }
   r3AcPreview();
   r3RenderHistory();
@@ -6800,12 +6854,12 @@ function r3AcPreview() {
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
   set('r3AcExtraTotal', r2M(c.extraTotal)); set('r3AcIncomeTotal', r2M(c.otherIncome)); set('r3AcCarProfit', (c.carProfit >= 0 ? '' : '−') + r2M(Math.abs(c.carProfit)));
   const cl = document.getElementById('r3AcCarList'); if (cl) cl.innerHTML = r3CarProfitHtml(mk);
-  set('r3AcCarProfitSub', `ปันผลแล้ว ${c.D.settled.length} คัน${c.D.pending.length ? ` · รอปันผล ${c.D.pending.length} คัน (ประมาณการ ยอดขาย − ต้นทุน ณ ปัจจุบัน = ${r2M(c.pendingEst)}${c.pendingNoEst ? ' · ' + c.pendingNoEst + ' คันยังไม่มียอดขาย/ราคาซื้อ ไม่นับ' : ''}${r3AcIncludePending ? ' — รวมแล้ว' : ' — ยังไม่รวม'})` : ''}`);
-  sum.innerHTML = `<div class="r3-cards">
+  set('r3AcCarProfitSub', `ปันผลแล้ว ${c.settledCount} คัน${c.locked ? ' (ยอดที่ส่งไว้)' : ''}${c.D.pending.length ? ` · รอปันผล ${c.D.pending.length} คัน (ประมาณการ ยอดขาย − ต้นทุน ณ ปัจจุบัน = ${r2M(c.pendingEst)}${c.pendingNoEst ? ' · ' + c.pendingNoEst + ' คันยังไม่มียอดขาย/ราคาซื้อ ไม่นับ' : ''}${r3AcIncludePending ? ' — รวมแล้ว' : ' — ยังไม่รวม'})` : ''}`);
+  sum.innerHTML = r3DiffAlertHtml(mk) + `<div class="r3-cards">
     <div class="r3-card ${c.revenue >= 0 ? 'pos' : 'neg'}"><div class="v">${c.revenue >= 0 ? '' : '−'}${r2M(Math.abs(c.revenue))}</div><div class="l">รายรับรวม</div><div class="s">กำไรรถ ${r2M(c.carProfit)}${c.estimated ? ' (รวมประมาณการ ' + r2M(c.pendingEst) + ')' : ''} + รายรับอื่น ${r2M(c.otherIncome)}</div></div>
     <div class="r3-card"><div class="v">${r2M(c.fixedTotal)}</div><div class="l">Fix Cost</div></div>
     <div class="r3-card"><div class="v">${r2M(c.extraTotal)}</div><div class="l">ค่าใช้จ่ายระหว่างเดือน</div></div></div>
-    <div class="r3-card ${c.net >= 0 ? 'pos' : 'neg'}" style="margin-bottom:10px;"><div class="l">กำไร / ขาดทุนสุทธิ ${escapeHtml(monthKeyLabel(mk))}${c.estimated ? ' — ประมาณการคร่าว ๆ (ยังไม่ใช่ตัวเลขจริง)' : ''}</div>
+    <div class="r3-card ${c.net >= 0 ? 'pos' : 'neg'}" style="margin-bottom:10px;"><div class="l">กำไร / ขาดทุนสุทธิ ${escapeHtml(monthKeyLabel(mk))}${c.locked ? ' 🔒 ส่งยอดแล้ว' : ''}${c.estimated ? ' — ประมาณการคร่าว ๆ (ยังไม่ใช่ตัวเลขจริง)' : ''}</div>
       <div class="r3-big ${c.net >= 0 ? 'r2-pos' : 'r2-neg'}">${c.net >= 0 ? '+' : '−'}${r2M(Math.abs(c.net))} บาท</div>
       <div class="s">${c.net >= 0 ? 'กำไร' : 'ขาดทุน'} = รายรับรวม ${r3Pos(c.revenue)} − Fix Cost ${r2M(c.fixedTotal)} − ค่าใช้จ่ายระหว่างเดือน ${r2M(c.extraTotal)}</div></div>
     <label style="display:flex; gap:8px; align-items:center; font-size:13px; margin-bottom:14px;"><input type="checkbox" ${r3AcIncludePending ? 'checked' : ''} onchange="r3AcIncludePending = this.checked; r3AcPreview(); r3RenderHistory(); r3RenderPeriod();"> รวมประมาณการกำไรคร่าว ๆ ของรถที่ยังไม่กด "ปันผลแล้ว" (ยังไม่ใช่ตัวเลขจริง · ปกตินับเฉพาะคันที่ปันผลแล้ว)</label>
@@ -6815,12 +6869,16 @@ function r3AcPreview() {
 function r3CarModel(code) {
   const d = carDetails[code], c = r1Car(code);
   const t = [d && d.brand, d && d.model_name, r1YearTxt(d)].filter(Boolean).join(' ');
-  return t || (c && c.model) || '';
+  const plate = d ? [d.plate, d.plate_province].filter(Boolean).join(' ').trim() : '';
+  if (t) return t + (plate ? ' · ทะเบียน ' + plate : '');   // เหมือนบัญชีต่อคัน (r2CarLabel)
+  return (c && c.model) || '';
 }
 function r3CarProfitHtml(mk) {
   const D = r2MonthData(mk);
   const soldPrice = code => { const dv = r2DeliveryByCar(code); return dv && dv.sold_price != null ? Number(dv.sold_price) : null; };
-  const rows = D.settled.map(x => ({ code: x.code, price: soldPrice(x.code), profit: Number(x.settled_profit) || 0, date: x.settled_date, pending: false }))
+  const snap = r3SnapshotOf(mk);
+  const settledSrc = snap ? (snap.cars || []).map(x => ({ code: x.code, settled_profit: x.profit, settled_date: x.date })) : D.settled;
+  const rows = settledSrc.map(x => ({ code: x.code, price: soldPrice(x.code), profit: Number(x.settled_profit) || 0, date: x.settled_date, pending: false }))
     .concat(D.pending.map(r => ({ code: r.code, price: soldPrice(r.code), profit: r.est, costNow: r.c.hasPrice ? r.c.cost : null, saleFromStock: r.saleFromStock, date: null, pending: true })));
   if (!rows.length) return '<div class="muted">เดือนนี้ยังไม่มีรถที่ขาย</div>';
   const sp = x => x == null ? '<span class="muted">—</span>' : r3Pos(x);
@@ -6836,7 +6894,7 @@ function r3RenderHistory() {
   let h = '<div class="r1-form-section"><h4>ย้อนหลัง 6 เดือน' + (r3AcIncludePending ? ' <span class="r2-flag">รวมประมาณการ</span>' : '') + '</h4><div class="table-wrap"><table><thead><tr><th>เดือน</th><th>รายรับรวม</th><th>Fix Cost</th><th>ระหว่างเดือน</th><th>สุทธิ</th></tr></thead><tbody>';
   for (let i = 0; i < 6; i++) {
     const mk = shiftMonthKey(cur, -i), row = r3Monthly[mk], c = r3RowCalc(mk);
-    h += `<tr onclick="r3AcMonth='${mk}'; r3AcDirty=false; r3RenderMonthly(true);"><td>${escapeHtml(monthKeyLabel(mk))}</td><td>${r3Pos(c.revenue)}</td>` +
+    h += `<tr onclick="r3AcMonth='${mk}'; r3AcDirty=false; r3RenderMonthly(true);"><td>${escapeHtml(monthKeyLabel(mk))}${row && row.submitted ? ' 🔒' : ''}</td><td>${r3Pos(c.revenue)}</td>` +
       (row ? `<td>${r2M(c.fixedTotal)}</td><td>${r2M(c.extraTotal)}</td><td>${r3Pos(c.net)}</td>` : '<td class="muted" colspan="3">ยังไม่ได้บันทึกรายจ่ายเดือนนี้</td>') + '</tr>';
   }
   box.innerHTML = h + '</tbody></table></div></div>';
@@ -6891,9 +6949,127 @@ function r3RenderPeriod() {
     P.rows.map(r => `<tr class="${r.future ? 'muted' : ''}" onclick="r3AcMonth='${r.mk}'; r3AcDirty=false; r3RenderMonthly(true);"><td>${escapeHtml(monthKeyLabel(r.mk))}${r.future ? ' <span class="muted">(ยังไม่ถึง)</span>' : (r.saved ? '' : ' <span class="r2-flag">ยังไม่บันทึกรายจ่าย</span>')}</td><td>${r2M(r.c.carProfit)}</td><td>${r2M(r.c.otherIncome)}</td><td>${r2M(r.c.fixedTotal)}</td><td>${r2M(r.c.extraTotal)}</td><td>${r3Pos(r.c.net)}</td></tr>`).join('') +
     `<tr class="total"><td><b>รวม</b></td><td><b>${r2M(t.carProfit)}</b></td><td><b>${r2M(t.otherIncome)}</b></td><td><b>${r2M(t.fixedTotal)}</b></td><td><b>${r2M(t.extraTotal)}</b></td><td>${r3Pos(t.net)}</td></tr></tbody></table></div></div>`;
 }
+function r3LockBannerHtml(mk, row) {
+  if (!row || !row.submitted) return '';
+  const snap = r3SnapshotOf(mk);
+  const at = Number(row.submitted_at) || 0;
+  const when = at ? fmtDate(at) + ' ' + new Date(at).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : '';
+  const adj = snap && Array.isArray(snap.adjustments) && snap.adjustments.length
+    ? '<div class="muted" style="margin-top:8px; font-size:12.5px;">ปรับยอดหลังส่งแล้ว ' + snap.adjustments.length + ' ครั้ง: ' + snap.adjustments.map(a => fmtDate(a.at) + ' ' + (Number(a.total) >= 0 ? '+' : '−') + r2M(Math.abs(Number(a.total) || 0)) + (a.by ? ' (' + escapeHtml(salesDisplayName(a.by)) + ')' : '')).join(' · ') + '</div>' : '';
+  return `<div class="r2-info" style="border-left-color:#157F3C; margin-bottom:12px;"><b>🔒 ส่งยอดเดือนนี้แล้ว</b>${when ? ' เมื่อ ' + escapeHtml(when) : ''}${row.submitted_by ? ' · โดย ' + escapeHtml(salesDisplayName(row.submitted_by)) : ''} — ตัวเลขถูกล็อก แก้ไข/บันทึกรายการไม่ได้
+    <div style="margin-top:8px;"><button class="btn btn-ghost btn-sm" onclick="r3AcUnsubmit()">ยกเลิกการส่งยอด</button></div>${adj}</div>`;
+}
+/* ส่วนต่างของเดือน: (เดือนที่ส่งยอดแล้ว) เทียบยอดที่ส่งไว้กับตัวเลขปัจจุบัน · (เดือนที่ยังไม่ส่ง) รถที่แก้ตัวเลขหลังปันผลและยังไม่ได้ยืนยัน */
+function r3MonthDiff(mk) {
+  const D = r2MonthData(mk);
+  const snap = r3SnapshotOf(mk);
+  const flagged = D.settled.filter(x => x.settled_change_pending);
+  const items = [];
+  const num = v => Number(v) || 0;
+  if (snap) {
+    const snapMap = {}, liveMap = {};
+    (snap.cars || []).forEach(c => { snapMap[c.code] = num(c.profit); });
+    D.settled.forEach(x => { liveMap[x.code] = num(x.settled_profit); });
+    Object.keys(liveMap).forEach(code => {
+      if (!(code in snapMap)) items.push({ code, kind: 'ปันผลเพิ่มหลังส่งยอด', prev: 0, cur: liveMap[code], diff: liveMap[code] });
+      else if (Math.abs(liveMap[code] - snapMap[code]) >= 0.005) items.push({ code, kind: 'แก้ตัวเลข', prev: snapMap[code], cur: liveMap[code], diff: liveMap[code] - snapMap[code] });
+    });
+    Object.keys(snapMap).forEach(code => { if (!(code in liveMap)) items.push({ code, kind: 'ยกเลิกปันผล/ย้ายเดือน', prev: snapMap[code], cur: 0, diff: -snapMap[code] }); });
+  }
+  flagged.forEach(x => {
+    if (items.some(i => i.code === x.code)) return;
+    const prev = num(x.settled_prev_profit), cur = num(x.settled_profit);
+    items.push({ code: x.code, kind: 'แก้ตัวเลขหลังปันผล', prev, cur, diff: cur - prev });
+  });
+  return { locked: !!snap, items, total: items.reduce((a, i) => a + i.diff, 0), flagged: flagged.map(x => x.code) };
+}
+function r3DiffAlertHtml(mk) {
+  const df = r3MonthDiff(mk);
+  if (!df.items.length) return '';
+  const sg = x => (x >= 0 ? '+' : '−') + r2M(Math.abs(x));
+  const rows = df.items.map(i => `<div class="r3-alert-row" style="cursor:default;"><span><b>${escapeHtml(i.code)}</b> ${escapeHtml(r1Title(i.code))} · ${escapeHtml(i.kind)}</span><span>กำไรเดิม ${sg(i.prev)} → ปัจจุบัน ${sg(i.cur)} (<b>ส่วนต่าง ${sg(i.diff)}</b>)</span></div>`).join('');
+  const head = df.locked
+    ? `⚠ ตัวเลขเดือนนี้เปลี่ยนหลังส่งยอด — ส่วนต่างรวม ${sg(df.total)} บาท (ยอดที่ส่งไว้ยังไม่เปลี่ยนจนกว่าจะกดยืนยัน)`
+    : `⚠ มีการแก้ตัวเลขรถที่ปันผลไปแล้ว — ส่วนต่างรวม ${sg(df.total)} บาท (ตัวเลขเดือนนี้เปลี่ยนแล้ว รอยืนยันรับทราบส่วนต่าง)`;
+  return `<div class="r2-warn" style="margin-bottom:12px;"><b>${head}</b><div class="r3-alert-body" style="padding:6px 0 0;">${rows}</div>
+    <div style="margin-top:8px;"><button class="btn btn-primary btn-sm" onclick="r3AcConfirmDiff()">${df.locked ? 'ยืนยันส่วนต่าง และปรับยอดที่ส่งไว้' : 'ยืนยันรับทราบส่วนต่าง'}</button></div></div>`;
+}
+function r3AcConfirmDiff() {
+  if (!isAdmin()) return;
+  const mk = r3AcCur();
+  const df = r3MonthDiff(mk);
+  if (!df.items.length) return;
+  const sg = x => (x >= 0 ? '+' : '−') + r2M(Math.abs(x));
+  const msg = df.locked
+    ? `เดือน ${monthKeyLabel(mk)} ส่งยอดแล้ว — ส่วนต่างรวม ${sg(df.total)} บาท (${df.items.map(i => i.code).join(', ')}) ถ้ายืนยัน ยอดกำไรรถที่ส่งไว้จะถูกปรับให้เท่าตัวเลขปัจจุบัน และบันทึกประวัติการปรับยอดไว้`
+    : `ส่วนต่างรวม ${sg(df.total)} บาท (${df.items.map(i => i.code).join(', ')}) ตัวเลขเดือน ${monthKeyLabel(mk)} เปลี่ยนไปแล้ว ยืนยันว่ารับทราบส่วนต่างนี้`;
+  r2Confirm('ยืนยันส่วนต่างบัญชีรายเดือน?', msg, 'ยืนยัน', async () => {
+    try {
+      const now = Date.now();
+      for (const code of df.flagged) {
+        const L = r2Ledger[code] || {};
+        const { error } = await sb.from('car_ledger').update({ settled_change_pending: false, settled_prev_profit: null, settled_change_at: null, settled_change_by: null }).eq('code', code);
+        if (error) throw error;
+        r2Ledger[code] = Object.assign({}, L, { settled_change_pending: false, settled_prev_profit: null });
+      }
+      if (df.locked) {
+        const row = r3Monthly[mk] || {};
+        const old = r3SnapshotOf(mk) || {};
+        const adjustments = (Array.isArray(old.adjustments) ? old.adjustments : []).concat([{ at: now, by: session.username, total: df.total, items: df.items.map(i => ({ code: i.code, prev: i.prev, cur: i.cur })) }]);
+        const snap = r3BuildSnapshot(mk, row.fixed || [], row.extra || [], row.income || [], adjustments);
+        const { error } = await sb.from('acct_monthly').update({ submitted_snapshot: snap }).eq('month', mk);
+        if (error) throw error;
+      }
+      showToast(df.locked ? 'ปรับยอดที่ส่งไว้ตามตัวเลขปัจจุบันแล้ว' : 'ยืนยันรับทราบส่วนต่างแล้ว');
+      reloadR2Ledger();
+      reloadR3();
+    } catch (e) { showToast('บันทึกไม่สำเร็จ (ต้องรัน round6_setup.sql ก่อน): ' + e.message, true); }
+  });
+}
+async function r3AcSubmit() {
+  if (!isAdmin()) return;
+  const mk = r3AcCur();
+  if (r3IsSubmitted(mk)) return;
+  const { fixed, extra, income, bad } = r3AcRead();
+  if (bad) { showToast('วันที่ในรายการไม่ถูกต้อง — พิมพ์เป็น วว/ดด/ปปปป', true); return; }
+  const df = r3MonthDiff(mk);
+  if (df.items.length) { showToast('เดือนนี้มีส่วนต่างจากการแก้ตัวเลขรถที่ปันผลแล้วที่ยังไม่ยืนยัน — ยืนยันส่วนต่างก่อนส่งยอด', true); return; }
+  extra.forEach(x => { delete x.badDate; }); income.forEach(x => { delete x.badDate; });
+  const note = (document.getElementById('r3AcNote').value || '').trim() || null;
+  const c = r3AcCalc(mk, fixed, extra, false, income);
+  const sg = x => (x >= 0 ? '+' : '−') + r2M(Math.abs(x));
+  r2Confirm('ส่งยอดเดือน ' + monthKeyLabel(mk) + '?',
+    `กำไรรถ ${r2M(c.carProfit)} (ปันผลแล้ว ${c.settledCount} คัน) + รายรับอื่น ${r2M(c.otherIncome)} − Fix Cost ${r2M(c.fixedTotal)} − ระหว่างเดือน ${r2M(c.extraTotal)} = สุทธิ ${sg(c.net)} บาท · ส่งแล้วตัวเลขเดือนนี้จะถูกล็อก${c.D.pending.length ? ` (รถรอปันผล ${c.D.pending.length} คันยังไม่นับ)` : ''} · กดยกเลิกการส่งยอดได้ภายหลัง`,
+    'ส่งยอด', async () => {
+      try {
+        const now = Date.now();
+        const snap = r3BuildSnapshot(mk, fixed, extra, income);
+        const { error } = await sb.from('acct_monthly').upsert({ month: mk, fixed, extra, income, note, submitted: true, submitted_at: now, submitted_by: session.username, submitted_snapshot: snap, updated_at: now }, { onConflict: 'month' });
+        if (error) throw error;
+        r3AcDirty = false;
+        showToast('ส่งยอด ' + monthKeyLabel(mk) + ' แล้ว — ล็อกตัวเลขเดือนนี้');
+        reloadR3();
+      } catch (e) { showToast('ส่งยอดไม่สำเร็จ (ต้องรัน round6_setup.sql ก่อน): ' + e.message, true); }
+    });
+}
+function r3AcUnsubmit() {
+  if (!isAdmin()) return;
+  const mk = r3AcCur();
+  if (!r3IsSubmitted(mk)) return;
+  r2Confirm('ยกเลิกการส่งยอด ' + monthKeyLabel(mk) + '?', 'ตัวเลขเดือนนี้จะปลดล็อกให้แก้ไขได้อีกครั้ง และยอดจะกลับไปคิดจากตัวเลขปัจจุบัน (ประวัติการปรับยอดหลังส่งจะถูกล้าง)', 'ยกเลิกการส่งยอด', async () => {
+    try {
+      const { error } = await sb.from('acct_monthly').update({ submitted: false, submitted_at: null, submitted_by: null, submitted_snapshot: null }).eq('month', mk);
+      if (error) throw error;
+      r3AcDirty = false;
+      showToast('ยกเลิกการส่งยอด ' + monthKeyLabel(mk) + ' แล้ว');
+      reloadR3();
+    } catch (e) { showToast('ไม่สำเร็จ: ' + e.message, true); }
+  });
+}
 async function r3AcSave() {
   if (!isAdmin()) return;
   const mk = r3AcCur();
+  if (r3IsSubmitted(mk)) { showToast('เดือนนี้ส่งยอดแล้ว — ยกเลิกการส่งยอดก่อนถึงจะแก้ไขได้', true); return; }
   const { fixed, extra, income, bad } = r3AcRead();
   if (bad) { showToast('วันที่ในรายการไม่ถูกต้อง — พิมพ์เป็น วว/ดด/ปปปป', true); return; }
   extra.forEach(x => { delete x.badDate; }); income.forEach(x => { delete x.badDate; });
