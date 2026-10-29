@@ -5253,8 +5253,9 @@ function r2SyncApproveUi() {
   const note = document.getElementById('r2LockNote');
   if (note) note.classList.toggle('hidden', !locked);
 }
+function r2TradeIn(v) { return v && v.has_tradein ? (Number(v.tradein_price) || 0) : 0; }
 function r2DeliverySummary(v) {
-  return (Number(v.down_payment) || 0) + (v.transfer_mode === 'ตัวเลข' ? (Number(v.transfer_fee) || 0) : 0) + r2ListSum(r2DeliveryItems(v)) - (v.buy_type === 'ไฟแนนซ์' ? (Number(v.deposit_amount) || 0) : 0);
+  return (Number(v.down_payment) || 0) - r2TradeIn(v) + (v.transfer_mode === 'ตัวเลข' ? (Number(v.transfer_fee) || 0) : 0) + r2ListSum(r2DeliveryItems(v)) - (v.buy_type === 'ไฟแนนซ์' ? (Number(v.deposit_amount) || 0) : 0);
 }
 // รถของเคสนี้ถูกเจ้าของเต็นท์คอนเฟิร์มขายแล้ว (สถานะรถ "ขาย") = ส่งมอบแล้ว
 function r2CaseDelivered(caseId, carCode) {
@@ -5457,6 +5458,8 @@ function r2RenderDocForm(v) {
   if (kind === 'delivery') {
     h += `<div class="field"><label>ค่าใช้จ่ายอื่น ๆ (ถ้ามี)</label><div id="r2d_otherItems">${r2DeliveryItems(v).map(x => r2RowHtml(x.label, x.amount, 'r2DocUpdate()', undefined, undefined, true)).join('')}</div><button type="button" class="btn btn-ghost btn-sm r2-add" onclick="r2AddRow('r2d_otherItems', 'r2DocUpdate()', false, false, true)">+ เพิ่มรายการ</button><div class="hint">ใส่ชื่อรายการและจำนวนเงิน เพิ่มได้หลายรายการ · ใส่ติดลบได้ (เช่น ส่วนลด -5,000)</div></div>`;
   }
+  h += F('มีรถเทิร์นไหม', S('tradein', ['ไม่มี', 'มี'], v.has_tradein ? 'มี' : 'ไม่มี'));
+  h += R(F('รุ่นรถเทิร์น', T('tradein_model', v.tradein_model, ' placeholder="พิมพ์ ยี่ห้อ/รุ่น/ปี"'), '', 'r2w_tradeM'), F('ราคารถเทิร์น (บาท)', M('tradein_price', v.tradein_price), kind === 'delivery' ? 'หักออกจากยอดใช้จ่ายวันออกรถของลูกค้า' : '', 'r2w_tradeP'));
   h += R(F('ช่องทาง', S('channel', chOpts, v.channel || CHANNELS[0])), F('รหัสนายหน้า', T('broker_code', v.broker_code, ' placeholder="NC001"'), 'ว่างได้ถ้าไม่มีนายหน้า', 'r2w_broker'));
   h += R(F('ชื่อลูกค้า', T('customer_name', v.customer_name)), F('เบอร์ติดต่อ', T('customer_phone', v.customer_phone)));
   if (kind === 'booking') h += F('หมายเหตุ', `<textarea id="r2d_note">${escapeHtml(v.note || '')}</textarea>`);
@@ -5509,6 +5512,7 @@ function r2DocUpdate() {
   const fin = !!bt && bt.value === 'ไฟแนนซ์';
   show('r2w_finco', fin);
   show('r2w_finamt', fin);
+  { const ti = g('tradein'); const on = !!ti && ti.value === 'มี'; show('r2w_tradeM', on); show('r2w_tradeP', on); }
   const ch = g('channel');
   if (ch) show('r2w_broker', R2_BROKER_CHANNELS.indexOf(ch.value) !== -1);
   const gapEl = g('down_payment');
@@ -5535,13 +5539,16 @@ function r2DocUpdate() {
     const items = r2ReadRows('r2d_otherItems');
     const otherSum = r2ListSum(items);
     const dep = n('deposit_amount');
-    const total = n('down_payment') + transfer + otherSum - (fin ? dep : 0);
+    const tiEl = g('tradein');
+    const trade = tiEl && tiEl.value === 'มี' ? n('tradein_price') : 0;
+    const total = n('down_payment') + transfer + otherSum - (fin ? dep : 0) - trade;
     const trLbl = mode === 'ตามจริง' ? 'ค่าจัดโอน (เก็บตามจริง — ยังไม่รวมในยอด)' : mode === 'แถม' ? 'ค่าจัดโอน (แถม)' : 'ค่าจัดโอน';
     sum.innerHTML = `
       <div class="r2-sum-row"><span>เงินส่วนต่าง / เงินดาวน์${fin ? '' : ' (หักเงินจอง ' + r2M(dep) + ' แล้ว)'}</span><span class="num">${r2M(n('down_payment'))}</span></div>
       <div class="r2-sum-row"><span>${trLbl}</span><span class="num">${r2M(transfer)}</span></div>
       ${items.length ? items.map(x => `<div class="r2-sum-row"><span>${escapeHtml(x.label || 'ค่าใช้จ่ายอื่น ๆ')}</span><span class="num">${r2M(x.amount || 0)}</span></div>`).join('') : '<div class="r2-sum-row"><span>ค่าใช้จ่ายอื่น ๆ</span><span class="num">0</span></div>'}
       ${fin ? `<div class="r2-sum-row"><span>หัก เงินจอง</span><span class="num">−${r2M(dep)}</span></div>` : ''}
+      ${trade ? `<div class="r2-sum-row"><span>หัก รถเทิร์น${(g('tradein_model') && g('tradein_model').value.trim()) ? ' (' + escapeHtml(g('tradein_model').value.trim()) + ')' : ''}</span><span class="num">−${r2M(trade)}</span></div>` : ''}
       <div class="r2-sum-row total"><span>รวมยอดใช้จ่ายวันออกรถ (หักเงินจองแล้ว)</span><span class="num">${r2M(total)} บาท</span></div>`;
   }
 }
@@ -5573,6 +5580,9 @@ function r2DocRead() {
     channel, broker_code: (channel && R2_BROKER_CHANNELS.indexOf(channel) !== -1 && s('broker_code')) ? s('broker_code').toUpperCase() : null,
     customer_name: s('customer_name'), customer_phone: s('customer_phone'),
   };
+  // รถเทิร์น: ส่งคอลัมน์ใหม่เฉพาะเมื่อมีรถเทิร์น หรือเคยบันทึกไว้ (กันพังถ้ายังไม่ได้รัน SQL)
+  { const hasT = g('tradein') === 'มี';
+    if (hasT || (base && base.has_tradein !== undefined)) { rec.has_tradein = hasT; rec.tradein_model = hasT ? s('tradein_model') : null; rec.tradein_price = hasT ? n('tradein_price') : null; } }
   if (kind === 'booking') {
     rec.deposit_method = g('deposit_method') || 'โอน';
     rec.note = s('note');
@@ -5592,6 +5602,7 @@ async function r2SaveDoc() {
   if (r2LockedForMe(kind, r2DocCaseId)) { showToast('ใบส่งมอบนี้ Approved แล้ว — เซลล์แก้ไขไม่ได้', true); return; }
   const rec = r2DocRead();
   if (!rec.case_id) { showToast('กรุณาเลือกรหัสเคสที่มีอยู่ในระบบ', true); return; }
+  if (rec.has_tradein && (!rec.tradein_model || !(rec.tradein_price > 0))) { showToast('มีรถเทิร์น — กรอกรุ่นรถเทิร์นและราคาด้วย', true); return; }
   if (!r2Own({ case_id: rec.case_id, sales_username: rec.sales_username })) { showToast('เคสนี้ไม่ใช่เคสที่คุณดูแล', true); return; }
   if (kind === 'booking' && !rec.booking_date) { showToast('กรุณากรอกวันที่จอง ให้ถูกรูปแบบ วว/ดด/ปปปป', true); return; }
   if (kind === 'delivery') {
@@ -5719,12 +5730,13 @@ function r2SlipLines(kind, v) {
     r2DeliveryItems(v).forEach(x => add(x.label || 'ค่าใช้จ่ายอื่น ๆ', m(x.amount)));
     add('ซื้อ', buy);
   }
+  if (v.has_tradein) add('รถเทิร์น', (v.tradein_model || '—') + ' · ' + m(v.tradein_price));
   add('ช่องทาง', ch);
   add('ชื่อลูกค้า', v.customer_name || '—');
   add('เบอร์ติดต่อ', v.customer_phone || '—');
   add('เซลล์ผู้ดูแล', v.sales_username ? salesDisplayName(v.sales_username) : '');
   if (kind === 'booking') add('หมายเหตุ', v.note);
-  if (kind === 'delivery') add('สรุปยอดใช้จ่ายวันออกรถ (หักเงินจองแล้ว)', m(r2DeliverySummary(v)) + (v.transfer_mode === 'ตามจริง' ? ' (ไม่รวมค่าจัดโอนเก็บตามจริง)' : ''), true);
+  if (kind === 'delivery') add('สรุปยอดใช้จ่ายวันออกรถ (หักเงินจองแล้ว)', m(r2DeliverySummary(v)) + (v.has_tradein ? ' (หักรถเทิร์นแล้ว)' : '') + (v.transfer_mode === 'ตามจริง' ? ' (ไม่รวมค่าจัดโอนเก็บตามจริง)' : ''), true);
   return { title: kind === 'booking' ? 'ใบจองรถ' : 'ใบส่งมอบรถ', lines: L };
 }
 async function r2SlipCopy() {
