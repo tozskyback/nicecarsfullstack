@@ -2815,6 +2815,12 @@ function videoPostDate(videoId) {
   return post ? post.postDate : null;
 }
 
+function postAgeText(ms) {
+  const d0 = new Date(ms); d0.setHours(0, 0, 0, 0);
+  const t0 = new Date(); t0.setHours(0, 0, 0, 0);
+  const n = Math.round((t0 - d0) / 86400000);
+  return n === 0 ? 'วันนี้' : n > 0 ? n + ' วันที่แล้ว' : 'อีก ' + (-n) + ' วัน (ตามแผน)';
+}
 function renderCarPostSummary() {
   const wrap = document.getElementById('carPostSummary');
   if (!wrap) return;
@@ -2837,7 +2843,7 @@ function renderCarPostSummary() {
       ${rows.map(r => `
         <div class="car-row">
           <div><span class="code-badge">${escapeHtml(r.code)}</span> ${escapeHtml(r.car.model)}</div>
-          <div class="muted">โพสล่าสุด ${fmtDate(r.date)}</div>
+          <div class="muted">โพสล่าสุด ${fmtDate(r.date)} · ${postAgeText(r.date)}</div>
         </div>
       `).join('')}
     </div>
@@ -5913,7 +5919,7 @@ function r2CostOf(code, Lo) {
   put(A.broker_sell_fee, 'out', num(L.broker_sell_fee), 'ค่าคอมนายหน้าขาย');
   put(A.wash_fee, 'out', num(L.wash_fee), 'ค่าล้างรถ');
   put(A.doc_release_fee, 'out', num(L.doc_release_fee), 'ค่าคอมเอกสารปล่อยรถ');
-  put(A.sales_comm, 'out', salesComm, 'ค่าคอมเซลล์ขาย');
+  put(A.sales_comm || 'กองกลาง', 'out', salesComm, 'ค่าคอมเซลล์ขาย');
   put(A.transfer_actual, 'out', transferActual, 'ค่าจัดโอน (ตามจริง)');
   (L.other_expenses || []).forEach(x => put(x.account, 'out', num(x.amount), x.label || 'ค่าใช้จ่ายอื่น ๆ'));
   put(A.deposit || 'เงินจอง', 'in', depositAuto, 'เงินจอง');
@@ -6020,7 +6026,7 @@ function r2LedgerRender(code) {
   const R = (...c) => `<div class="field-row">${c.join('')}</div>`;
   const isNewLedger = !r2Ledger[code];
   const prevA = isNewLedger ? r2LastAccounts(code) : null;     // คันใหม่: ใช้บัญชีจากคันก่อนเป็นค่าเริ่มต้น
-  const AC = (key, def) => `<div class="r2-acct-line"><span>บัญชี</span><select id="r2l_acct_${key}"><option value="">— ไม่ระบุ —</option>` + R2_ACCOUNTS.map(a => `<option value="${a}"${a === ((L.accounts && L.accounts[key]) || (prevA && prevA[key]) || def) ? ' selected' : ''}>${a}</option>`).join('') + '</select></div>';
+  const AC = (key, def) => `<div class="r2-acct-line"><span>บัญชี</span><select id="r2l_acct_${key}"><option value="">— ไม่ระบุ —</option>` + R2_ACCOUNTS.map(a => `<option value="${a}"${a === ((L.accounts && L.accounts[key]) || (key === 'sales_comm' ? '' : (prevA && prevA[key])) || def) ? ' selected' : ''}>${a}</option>`).join('') + '</select></div>';
   const FA = (label, ctl, hint, key, def) => F(label, ctl + AC(key, def), hint);
 
   const sl0 = r2Ledger[code] && r2Ledger[code].settled ? r2Ledger[code] : null;
@@ -6043,7 +6049,7 @@ function r2LedgerRender(code) {
   h += R(FA('ค่าล้างรถ', M('wash_fee', L.wash_fee), '', 'wash_fee'), FA('ค่าคอมเอกสารปล่อยรถ', M('doc_release_fee', L.doc_release_fee), '', 'doc_release_fee'));
   h += F('ค่าคอมเซลล์ขาย (คำนวณจากใบส่งมอบ)', `<div class="r2-static">${c0.comm
     ? `${escapeHtml(salesDisplayName(r2SalesOf(refs.delivery)))} · ${c0.comm.steps} สเต็ป × ${r2M(c0.comm.rate)} = ${c0.comm.manualAmount ? '<s class="muted">' + r2M(c0.comm.formula) + '</s> → ' : ''}<b>${r2M(c0.comm.amount)}</b> บาท${c0.comm.manual ? ' <span class="r2-flag">แก้สเต็ปด้วยมือ</span>' : ''}${c0.comm.manualAmount ? ' <span class="r2-flag">แก้ค่าคอมด้วยมือ</span>' : ''}`
-    : 'ยังไม่มีใบส่งมอบ'}</div>`, 'แก้สเต็ปหรือค่าคอมได้ที่หน้า "ค่าคอมเซลล์" (ปุ่ม แก้ค่าคอม)').replace(/<\/div>$/, AC('sales_comm') + '</div>');
+    : 'ยังไม่มีใบส่งมอบ'}</div>`, 'แก้สเต็ปหรือค่าคอมได้ที่หน้า "ค่าคอมเซลล์" (ปุ่ม แก้ค่าคอม)').replace(/<\/div>$/, AC('sales_comm', 'กองกลาง') + '</div>');
   if (c0.tmode === 'ตามจริง') {
     h += R(
       FA('ค่าจัดโอน (ยอดจริงที่ร้านจ่าย)', M('transfer_actual', L.transfer_actual), 'ใบนี้ระบุเก็บตามจริง', 'transfer_actual'),
