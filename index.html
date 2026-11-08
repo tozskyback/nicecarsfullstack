@@ -1650,7 +1650,7 @@ function rowToVideo(r) {
     id: r.id, code: r.code, title: r.title, status: r.status,
     plannerStatus: r.planner_status, approvalStatus: r.approval_status || APPROVAL_PENDING,
     link: r.link, note: r.note,
-    createdAt: r.created_at, completedAt: r.completed_at || null,
+    createdAt: r.created_at, completedAt: r.completed_at || null, resubmitted: !!r.resubmitted,
   };
 }
 function rowToWeeklyPost(r) {
@@ -2736,9 +2736,15 @@ async function toggleVideoStatus(id) {
     newStatus = v.status === VIDEO_STATUS_EDITING ? VIDEO_STATUS_REVIEW : VIDEO_STATUS_EDITING;
   }
   try {
-    const { error } = await sb.from('videos').update({ status: newStatus, completed_at: newStatus === VIDEO_STATUS_DONE ? Date.now() : null }).eq('id', id);
+    const patch = { status: newStatus, completed_at: newStatus === VIDEO_STATUS_DONE ? Date.now() : null };
+    // ตัดต่อแก้เสร็จ ส่งกลับมารอตรวจ: ผลตรวจ "ต้องแก้" → "ยังไม่ตรวจ" (พร้อมธงว่าเป็นการส่งตรวจซ้ำ)
+    const resubmit = newStatus === VIDEO_STATUS_REVIEW && v.approvalStatus === APPROVAL_REVISE;
+    if (resubmit) { patch.approval_status = APPROVAL_PENDING; patch.resubmitted = true; }
+    else if (v.resubmitted && newStatus !== VIDEO_STATUS_REVIEW) patch.resubmitted = false;
+    let { error } = await sb.from('videos').update(patch).eq('id', id);
+    if (error && 'resubmitted' in patch) { delete patch.resubmitted; ({ error } = await sb.from('videos').update(patch).eq('id', id)); }   // ยังไม่ได้รัน SQL: เปลี่ยนผลตรวจได้ แต่ไม่มีธงส่งซ้ำ
     if (error) throw error;
-    showToast('อัปเดตสถานะ ' + v.code + ' เป็น ' + newStatus);
+    showToast('อัปเดตสถานะ ' + v.code + ' เป็น ' + newStatus + (resubmit ? ' — ผลตรวจเปลี่ยนเป็น ยังไม่ตรวจ' : ''));
     reloadVideos();
   } catch (e) { showToast('อัปเดตไม่สำเร็จ: ' + e.message, true); }
 }
@@ -2748,6 +2754,7 @@ async function setVideoApproval(id, newApproval) {
   const v = videos.find(x => x.id === id);
   if (!v) return;
   const patch = { approval_status: newApproval };
+  if (v.resubmitted) patch.resubmitted = false;
   if (newApproval === APPROVAL_PASS) {
     patch.status = VIDEO_STATUS_DONE;
     patch.completed_at = Date.now();
@@ -4592,11 +4599,12 @@ function renderOwnerTasks() {
   setCount('ownVideoCount', t.video.length);
   const APPR = [APPROVAL_PENDING, APPROVAL_PASS, APPROVAL_REVISE];
   // ตัดต่อแก้เสร็จแล้วกดกลับเป็น "รอตรวจ" (ผลตรวจเดิมยังเป็น "ต้องแก้") = ส่งกลับมาตรวจซ้ำ → ขึ้นก่อนและมีป้ายระบุ
-  const vidRank = v => (v.status === VIDEO_STATUS_REVIEW && v.approvalStatus === APPROVAL_REVISE) ? 0 : (v.status === VIDEO_STATUS_REVIEW ? 1 : 2);
+  const isResub = v => v.status === VIDEO_STATUS_REVIEW && (v.approvalStatus === APPROVAL_REVISE || (v.resubmitted && v.approvalStatus === APPROVAL_PENDING));
+  const vidRank = v => isResub(v) ? 0 : (v.status === VIDEO_STATUS_REVIEW ? 1 : 2);
   const vids = t.video.slice().sort((a, b) => vidRank(a) - vidRank(b));
   document.getElementById('ownVideoList').innerHTML = vids.length ? vids.map(v => {
     const sentBack = v.status === VIDEO_STATUS_EDITING;   // ต้องแก้ และส่งกลับให้ตัดต่อแล้ว
-    const resub = v.status === VIDEO_STATUS_REVIEW && v.approvalStatus === APPROVAL_REVISE;
+    const resub = isResub(v);
     const flag = resub
       ? '<span class="badge" style="background:#157F3C18; color:#157F3C; margin-left:8px;"><span class="dot"></span>ตัดต่อแก้เสร็จแล้ว — ส่งกลับมารอตรวจซ้ำ</span>'
       : (sentBack ? '<span class="badge" style="background:#C97F0018; color:#C97F00; margin-left:8px;"><span class="dot"></span>ส่งกลับให้ตัดต่อแก้แล้ว — รอแก้เสร็จ</span>' : '<span class="badge" style="background:#2563EB18; color:#2563EB; margin-left:8px;"><span class="dot"></span>รอตรวจ</span>');
