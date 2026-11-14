@@ -146,7 +146,7 @@
   .content { padding: 20px 28px 48px; max-width: 1280px; }
 
   /* stat cards */
-  .stats { display: grid; grid-template-columns: repeat(5, minmax(100px,1fr)); gap: 12px; margin-bottom: 20px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px,1fr)); gap: 12px; margin-bottom: 20px; }
   .stat-card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; }
   .stat-card .num { font-family: var(--font-code); font-size: 26px; font-weight: 600; color: var(--steel); }
   .stat-card.amber .num { color: var(--amber); }
@@ -2193,9 +2193,15 @@ function renderStats() {
   const booking = list.filter(c => c.status === 'ติดจอง').length;
   const sold = list.filter(c => c.status === SOLD_STATUS).length;
   const closed = list.filter(c => !isOpenStatus(c.status) && c.status !== SOLD_STATUS).length;
+  // แยกเคสทั้งหมดของเดือนเป็น 2 กลุ่ม (รวมกันเท่ากับเคสทั้งหมดเสมอ): รับเคสในเดือนนี้ / รับเคสก่อนเดือนนี้ (เคสเก่าที่ยังค้างหรือปิดในเดือนนี้)
+  const recvMonth = c => /^\d{4}-\d{2}/.test(c.dateReceived || '') ? String(c.dateReceived).slice(0, 7) : (c.createdAt ? monthKeyOf(c.createdAt) : selectedMonth);
+  const newCnt = list.filter(c => recvMonth(c) >= selectedMonth).length;
+  const oldCnt = total - newCnt;
   const wrap = document.getElementById('statCards');
   wrap.innerHTML = `
     <div class="stat-card"><div class="num">${total}</div><div class="lbl">เคสทั้งหมด</div></div>
+    <div class="stat-card" title="เคสที่มีวันที่รับเคสอยู่ในเดือนที่เลือก"><div class="num">${newCnt}</div><div class="lbl">เคสเดือนนี้</div></div>
+    <div class="stat-card" title="เคสที่รับก่อนเดือนที่เลือก (ติดตาม/ติดจองค้างมา หรือปิดเคสในเดือนนี้)"><div class="num">${oldCnt}</div><div class="lbl">เคสเก่า</div></div>
     <div class="stat-card"><div class="num" style="color:${statusMeta('ติดตาม').color}">${tracking}</div><div class="lbl">กำลังติดตาม</div></div>
     <div class="stat-card"><div class="num" style="color:${statusMeta('ติดจอง').color}">${booking}</div><div class="lbl">กำลังติดจอง</div></div>
     <div class="stat-card"><div class="num" style="color:${statusMeta(SOLD_STATUS).color}">${sold}</div><div class="lbl">ขายแล้ว</div></div>
