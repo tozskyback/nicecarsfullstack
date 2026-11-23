@@ -1619,7 +1619,10 @@ const APPROVAL_REVISE = 'ต้องแก้';
 const PLAN_NOT_POSTED = 'ยังไม่ลง';
 const PLAN_POSTED = 'ลงแล้ว';
 const SESSION_KEY = 'nc_session_v1';
-const POLL_MS = 8000; // สำรองไว้เผื่อ Realtime ไม่ทำงาน จะดึงข้อมูลใหม่ทุก ๆ กี่มิลลิวินาที
+const POLL_MS = 60000; // (เดิม 8 วินาที ทำให้ Egress สูง) ตอนนี้ดึงสำรองเฉพาะตอน Realtime หลุด · ดูข้อ POLL ด้านล่าง
+const POLL_SAFETY_MS = 15 * 60 * 1000; // Realtime ปกติ: ดึงซ้ำทั้งหมดเผื่อพลาดทุก 15 นาที (เฉพาะตอนเปิดแท็บอยู่)
+const rtStatus = {};   // สถานะ Realtime แต่ละช่อง (SUBSCRIBED/CHANNEL_ERROR/TIMED_OUT/CLOSED)
+function rtHealthy() { const v = Object.values(rtStatus); return v.length > 0 && v.every(x => x === 'SUBSCRIBED'); } // สำรองไว้เผื่อ Realtime ไม่ทำงาน จะดึงข้อมูลใหม่ทุก ๆ กี่มิลลิวินาที
 
 /* ---------------- State ---------------- */
 let sb = null;
@@ -1731,6 +1734,13 @@ async function boot() {
 
   try {
     sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    // ติดตามสถานะ Realtime ทุกช่อง (ใช้ตัดสินว่าต้องดึงสำรองหรือไม่)
+    { const _ch = sb.channel.bind(sb);
+      sb.channel = function (name, opts) {
+        const ch = _ch(name, opts), _sub = ch.subscribe.bind(ch);
+        ch.subscribe = function (cb, t) { return _sub(function (st, err) { rtStatus[name] = st; if (cb) cb(st, err); }, t); };
+        return ch;
+      }; }
   } catch (e) {
     document.getElementById('authLoading').textContent = 'เชื่อมต่อ Supabase ไม่สำเร็จ: ' + e.message;
     return;
@@ -1859,14 +1869,29 @@ function enterApp() {
   subscribeCars(); // ต้องใช้รหัสรถทั้งฝั่งเคสและฝั่งแผนโพส
   if (canManageVideos()) { subscribeVideos(); subscribeWeeklyPosts(); }
   if (isAdmin()) subscribeUsers();
-  setInterval(() => {
+  // ลด Egress: ไม่ดึงทุกตารางทุก 8 วินาทีอีกแล้ว
+  //  - แท็บถูกซ่อน → ไม่ดึง · กลับมาเปิดแท็บ (ซ่อนนานเกิน 1 นาที) → ดึงใหม่ 1 ครั้ง
+  //  - Realtime ปกติ → ดึงสำรองทุก 15 นาที · Realtime หลุด → ดึงทุก 60 วินาที
+  const pollAll = () => {
+    lastFullPoll = Date.now();
     if (!isEditor() && !isRegistry()) { reloadCases(); reloadBrokers(); }
     reloadRound1();
     reloadRound2();
     reloadCars();
     if (canManageVideos()) { reloadVideos(); reloadWeeklyPosts(); }
     if (isAdmin()) reloadUsers();
-  }, POLL_MS);
+  };
+  let lastFullPoll = Date.now(), hiddenAt = 0;
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { hiddenAt = Date.now(); return; }
+    if (hiddenAt && Date.now() - hiddenAt > 60000) pollAll();
+    hiddenAt = 0;
+  });
+  setInterval(() => {
+    if (document.hidden) return;
+    const gap = rtHealthy() ? POLL_SAFETY_MS : POLL_MS;
+    if (Date.now() - lastFullPoll >= gap - 1000) pollAll();
+  }, 15000);
 }
 
 function setConn(state, label) {
